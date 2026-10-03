@@ -1,0 +1,21 @@
+{
+  "name": "sparkyfitness-renpho",
+  "version": "0.1.0",
+  "description": "Community tool that syncs RENPHO smart tape measure and scale measurements into SparkyFitness",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "bin": { "sparkyfitness-renpho": "dist/cli.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "sync": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
