@@ -21,6 +21,7 @@ It is a standalone tool and needs no changes to SparkyFitness.
    | `SPARKY_URL` | Base URL of your SparkyFitness server, e.g. `https://fit.example.com` |
    | `SPARKY_API_KEY` | The API key from step 1 |
    | `STATE_PATH` | Optional, default `state.json`: record ids already synced |
+   | `LENGTH_UNIT` | Optional, `cm` (default) or `in`: unit for the custom tape sites (chest, arms, ...). Set to `in` if your SparkyFitness measurement unit is inches |
    | `SYNC_INTERVAL_MINUTES` | Optional: if > 0 the process keeps running and syncs on this interval |
 
 3. `npm install && npm run sync -- --dry-run`, then `npm run sync`. Run it from cron/systemd for regular syncs.
@@ -48,7 +49,10 @@ point `SPARKY_URL` at a host the container can reach (e.g. `http://host.docker.i
 | Tape: shoulder, chest, abdomen, arm (and left/right), thigh, calf | custom measurements (cm), categories auto-created |
 | Scale: weight, body fat %, body water %, BMR | check-in `weight`, `body_fat`, `body_water_percentage`, `bmr` |
 
-Inch values are converted to cm. Days use the timezone stored on each RENPHO record. Records already sent are
+Units: whatever unit the RENPHO app displays, each record carries its own unit code and the tool converts to
+cm first. neck/waist/hips are always sent in cm, because SparkyFitness stores them in cm and shows them in the
+user's chosen unit. The custom sites are stored with the unit they are sent in, so set `LENGTH_UNIT=in` if you
+use inches (changing it later creates a separate category, since the category is keyed on name and unit). Days use the timezone stored on each RENPHO record. Records already sent are
 tracked in the state file and are not re-sent; if SparkyFitness rejects any entry in a run, none are marked as
 synced and the next run retries.
 

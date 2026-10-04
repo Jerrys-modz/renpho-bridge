@@ -69,7 +69,14 @@ const CUSTOM_GIRTH: Record<string, string> = {
 
 const INCH_TO_CM = 2.54;
 
-export function mapGirthRecord(rec: RenphoRecord): HealthEntry[] {
+export type LengthUnit = 'cm' | 'in';
+
+/**
+ * Native check-in fields (neck/waist/hips) are always sent in cm: SparkyFitness stores cm and converts for
+ * display from the user's measurement-unit preference. Custom measurements are stored as-is under a
+ * category unit, so `customUnit` lets them match that preference.
+ */
+export function mapGirthRecord(rec: RenphoRecord, customUnit: LengthUnit = 'cm'): HealthEntry[] {
   const when = recordTime(rec);
   if (!when) return [];
   const entries: HealthEntry[] = [];
@@ -79,10 +86,12 @@ export function mapGirthRecord(rec: RenphoRecord): HealthEntry[] {
     if (raw === null || raw <= 0) continue; // unmeasured sites come back as 0
     const unitCode = num(rec[field.replace('Value', 'Unit')]);
     const cm = unitCode === 1 ? raw * INCH_TO_CM : raw; // `*Unit: 0` is cm
+    const native = NATIVE_GIRTH[field] !== undefined;
+    const inches = !native && customUnit === 'in';
     entries.push({
       type: NATIVE_GIRTH[field] ?? name,
-      value: Math.round(cm * 100) / 100,
-      unit: 'cm',
+      value: Math.round((inches ? cm / INCH_TO_CM : cm) * 100) / 100,
+      unit: inches ? 'in' : 'cm',
       ...when,
       source: 'renpho',
     });

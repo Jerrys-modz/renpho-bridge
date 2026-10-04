@@ -19,6 +19,11 @@ const renpho = new RenphoClient(required('RENPHO_EMAIL'), required('RENPHO_PASSW
 const sparky = new SparkyClient(required('SPARKY_URL'), required('SPARKY_API_KEY'));
 
 const intervalMinutes = Number(process.env.SYNC_INTERVAL_MINUTES ?? 0);
+const lengthUnit = (process.env.LENGTH_UNIT ?? 'cm').toLowerCase();
+if (lengthUnit !== 'cm' && lengthUnit !== 'in') {
+  console.error('LENGTH_UNIT must be "cm" or "in".');
+  process.exit(2);
+}
 const dryRun = args.has('--dry-run');
 
 async function once(): Promise<boolean> {
@@ -28,6 +33,7 @@ async function once(): Promise<boolean> {
     dryRun,
     statePath: process.env.STATE_PATH ?? 'state.json',
     since: sinceArg,
+    lengthUnit,
   });
   console.log(
     `${new Date().toISOString()} ${result.records} new RENPHO record(s) -> ${result.entries} entr${result.entries === 1 ? 'y' : 'ies'}` +

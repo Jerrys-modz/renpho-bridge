@@ -40,6 +40,16 @@ describe('mapGirthRecord', () => {
   });
 });
 
+describe('mapGirthRecord with inches', () => {
+  it('keeps native sites in cm and converts custom sites', () => {
+    const out = mapGirthRecord({ timeStamp: 1740830400, timeZone: '0', waistValue: 80, waistUnit: 0, chestValue: 101.6, chestUnit: 0 }, 'in');
+    expect(out).toMatchObject([
+      { type: 'waist', value: 80, unit: 'cm' },
+      { type: 'Chest', value: 40, unit: 'in' },
+    ]);
+  });
+});
+
 describe('mapScaleRecord', () => {
   it('maps weight, body fat, water and bmr', () => {
     const out = mapScaleRecord({ timeStamp: 1740830400, timeZone: '0', weight: 80.2, bodyfat: 18.5, water: 55, bmr: 1700, muscle: 0 });

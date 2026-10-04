@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { mapGirthRecord, mapScaleRecord, recordId, type HealthEntry } from './mapping.js';
+import { mapGirthRecord, mapScaleRecord, recordId, type HealthEntry, type LengthUnit } from './mapping.js';
 import type { RenphoClient, RenphoRecord } from './renphoClient.js';
 import type { SparkyClient } from './sparkyClient.js';
 
@@ -10,6 +10,8 @@ export interface SyncOptions {
   dryRun: boolean;
   /** Only records on/after this YYYY-MM-DD are synced. */
   since?: string;
+  /** Unit for custom-measurement tape sites (default cm). */
+  lengthUnit?: LengthUnit;
 }
 
 async function loadState(path: string): Promise<Set<string>> {
@@ -37,7 +39,7 @@ export async function runSync(
     }
   };
 
-  if (opts.includeTape) collect('girth', await renpho.getGirthMeasurements(), mapGirthRecord);
+  if (opts.includeTape) collect('girth', await renpho.getGirthMeasurements(), (r) => mapGirthRecord(r, opts.lengthUnit));
   if (opts.includeScale) collect('scale', await renpho.getScaleMeasurements(), mapScaleRecord);
 
   const entries = fresh.flatMap((f) => f.entries);
