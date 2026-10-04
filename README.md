@@ -34,14 +34,13 @@ Flags: `--dry-run`/`--test`, `--tape-only`, `--scale-only`, `--since=YYYY-MM-DD`
 
 ```bash
 cp .env.example .env   # fill in the values
-docker compose up -d --build
+docker compose up -d
 docker compose logs -f
 ```
 
-A prebuilt multi-arch image (amd64/arm64) is published to GHCR by the `Docker` workflow on every push to
-`main` (`latest`) and on `v*` tags. To use it instead of building, replace `build: .` in `docker-compose.yml`
-with `image: ghcr.io/jerrys-modz/renpho-bridge:latest` (the package may need to be made public in the repo's
-package settings before others can pull it).
+`docker-compose.yml` pulls the prebuilt multi-arch image (amd64/arm64) from
+`ghcr.io/jerrys-modz/renpho-bridge:latest`, published by the `Docker` workflow on every push to `main` and on
+`v*` tags. To build from source instead, replace the `image:` line with `build: .` and use `up -d --build`.
 
 The container syncs every `SYNC_INTERVAL_MINUTES` (default 60) and keeps its state in the `renpho-state`
 volume. Set `SYNC_INTERVAL_MINUTES=0` to sync once and exit (for an external scheduler), e.g.

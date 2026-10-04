@@ -1,6 +1,7 @@
 services:
   sparkyfitness-renpho:
-    build: .
+    image: ghcr.io/jerrys-modz/renpho-bridge:latest
+    # To build from source instead, replace the line above with: build: .
     restart: unless-stopped
     environment:
       TEST_MODE: ${TEST_MODE:-false}
