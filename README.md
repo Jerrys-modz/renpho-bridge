@@ -38,6 +38,11 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
+A prebuilt multi-arch image (amd64/arm64) is published to GHCR by the `Docker` workflow on every push to
+`main` (`latest`) and on `v*` tags. To use it instead of building, replace `build: .` in `docker-compose.yml`
+with `image: ghcr.io/jerrys-modz/renpho-bridge:latest` (the package may need to be made public in the repo's
+package settings before others can pull it).
+
 The container syncs every `SYNC_INTERVAL_MINUTES` (default 60) and keeps its state in the `renpho-state`
 volume. Set `SYNC_INTERVAL_MINUTES=0` to sync once and exit (for an external scheduler), e.g.
 `docker compose run --rm sparkyfitness-renpho --dry-run`. If SparkyFitness runs in another compose project,
