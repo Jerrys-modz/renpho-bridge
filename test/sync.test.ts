@@ -29,3 +29,13 @@ describe('runSync', () => {
     await expect(readFile(statePath, 'utf8')).rejects.toThrow();
   });
 });
+
+describe('runSync test mode', () => {
+  it('returns the pending entries without sending', async () => {
+    const statePath = join(await mkdtemp(join(tmpdir(), 'rp-')), 'state.json');
+    const send = vi.fn();
+    const r = await runSync(mkRenpho(), { send }, { includeScale: false, includeTape: true, statePath, dryRun: true });
+    expect(send).not.toHaveBeenCalled();
+    expect(r.pending).toMatchObject([{ type: 'waist', value: 80, unit: 'cm', date: '2025-03-01' }]);
+  });
+});

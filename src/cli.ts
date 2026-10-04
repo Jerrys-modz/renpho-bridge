@@ -16,8 +16,13 @@ function required(name: string): string {
 const args = new Set(process.argv.slice(2));
 const sinceArg = process.argv.find((a) => a.startsWith('--since='))?.slice(8);
 
+// Test mode: read from RENPHO and print what would be sent; never contacts SparkyFitness or writes state.
+const dryRun = args.has('--dry-run') || args.has('--test') || ['1', 'true', 'yes'].includes((process.env.TEST_MODE ?? '').toLowerCase());
+
 const renpho = new RenphoClient(required('RENPHO_EMAIL'), required('RENPHO_PASSWORD'));
-const sparky = new SparkyClient(required('SPARKY_URL'), required('SPARKY_API_KEY'));
+const sparky = dryRun
+  ? new SparkyClient('', '')
+  : new SparkyClient(required('SPARKY_URL'), required('SPARKY_API_KEY'));
 
 const intervalMinutes = Number(process.env.SYNC_INTERVAL_MINUTES ?? 0);
 const rawUnit = (process.env.LENGTH_UNIT ?? 'cm').toLowerCase();
@@ -26,7 +31,6 @@ if (rawUnit !== 'cm' && rawUnit !== 'in') {
   process.exit(2);
 }
 const lengthUnit: LengthUnit = rawUnit;
-const dryRun = args.has('--dry-run');
 
 async function once(): Promise<boolean> {
   const result = await runSync(renpho, sparky, {
@@ -37,9 +41,15 @@ async function once(): Promise<boolean> {
     since: sinceArg,
     lengthUnit,
   });
+  if (dryRun) {
+    console.log('[TEST MODE] Nothing is sent to SparkyFitness and no state is saved. Entries that would be sent:');
+    for (const e of result.pending) {
+      console.log(`  ${e.date}  ${e.type.padEnd(22)} ${String(e.value).padStart(8)} ${e.unit ?? ''}  (${e.timestamp})`);
+    }
+  }
   console.log(
     `${new Date().toISOString()} ${result.records} new RENPHO record(s) -> ${result.entries} entr${result.entries === 1 ? 'y' : 'ies'}` +
-      (dryRun ? ' (dry run, nothing sent)' : `, ${result.sent} accepted`)
+      (dryRun ? ' (test mode, nothing sent)' : `, ${result.sent} accepted`)
   );
   if (result.errors.length > 0) {
     console.error('SparkyFitness rejected some entries:', JSON.stringify(result.errors, null, 2));

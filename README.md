@@ -26,7 +26,9 @@ It is a standalone tool and needs no changes to SparkyFitness.
 
 3. `npm install && npm run sync -- --dry-run`, then `npm run sync`. Run it from cron/systemd for regular syncs.
 
-Flags: `--dry-run`, `--tape-only`, `--scale-only`, `--since=YYYY-MM-DD`.
+**Test mode:** `--dry-run` (alias `--test`) or `TEST_MODE=true` logs in to RENPHO, reads your data and prints every entry that would be sent (date, type, value, unit), without contacting SparkyFitness or saving state, so `SPARKY_URL` / `SPARKY_API_KEY` aren't needed. Records that were already synced earlier are not shown again. In Docker, set `TEST_MODE=true` in `.env` and watch `docker compose logs`.
+
+Flags: `--dry-run`/`--test`, `--tape-only`, `--scale-only`, `--since=YYYY-MM-DD`.
 
 ## Docker
 

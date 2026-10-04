@@ -26,7 +26,7 @@ export async function runSync(
   renpho: Pick<RenphoClient, 'getGirthMeasurements' | 'getScaleMeasurements'>,
   sparky: Pick<SparkyClient, 'send'>,
   opts: SyncOptions
-): Promise<{ records: number; entries: number; sent: number; errors: unknown[] }> {
+): Promise<{ records: number; entries: number; sent: number; errors: unknown[]; pending: HealthEntry[] }> {
   const seen = await loadState(opts.statePath);
   const fresh: { id: string; entries: HealthEntry[] }[] = [];
 
@@ -44,7 +44,7 @@ export async function runSync(
 
   const entries = fresh.flatMap((f) => f.entries);
   if (opts.dryRun || entries.length === 0) {
-    return { records: fresh.length, entries: entries.length, sent: 0, errors: [] };
+    return { records: fresh.length, entries: entries.length, sent: 0, errors: [], pending: entries };
   }
 
   const { sent, errors } = await sparky.send(entries);
@@ -53,5 +53,5 @@ export async function runSync(
     for (const f of fresh) seen.add(f.id);
     await writeFile(opts.statePath, JSON.stringify([...seen], null, 2));
   }
-  return { records: fresh.length, entries: entries.length, sent, errors };
+  return { records: fresh.length, entries: entries.length, sent, errors, pending: [] };
 }
