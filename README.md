@@ -21,10 +21,24 @@ It is a standalone tool and needs no changes to SparkyFitness.
    | `SPARKY_URL` | Base URL of your SparkyFitness server, e.g. `https://fit.example.com` |
    | `SPARKY_API_KEY` | The API key from step 1 |
    | `STATE_PATH` | Optional, default `state.json`: record ids already synced |
+   | `SYNC_INTERVAL_MINUTES` | Optional: if > 0 the process keeps running and syncs on this interval |
 
 3. `npm install && npm run sync -- --dry-run`, then `npm run sync`. Run it from cron/systemd for regular syncs.
 
 Flags: `--dry-run`, `--tape-only`, `--scale-only`, `--since=YYYY-MM-DD`.
+
+## Docker
+
+```bash
+cp .env.example .env   # fill in the values
+docker compose up -d --build
+docker compose logs -f
+```
+
+The container syncs every `SYNC_INTERVAL_MINUTES` (default 60) and keeps its state in the `renpho-state`
+volume. Set `SYNC_INTERVAL_MINUTES=0` to sync once and exit (for an external scheduler), e.g.
+`docker compose run --rm sparkyfitness-renpho --dry-run`. If SparkyFitness runs in another compose project,
+point `SPARKY_URL` at a host the container can reach (e.g. `http://host.docker.internal:3010`).
 
 ## Mapping
 

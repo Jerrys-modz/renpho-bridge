@@ -1,0 +1,15 @@
+services:
+  sparkyfitness-renpho:
+    build: .
+    restart: unless-stopped
+    environment:
+      RENPHO_EMAIL: ${RENPHO_EMAIL:?set RENPHO_EMAIL}
+      RENPHO_PASSWORD: ${RENPHO_PASSWORD:?set RENPHO_PASSWORD}
+      SPARKY_URL: ${SPARKY_URL:?set SPARKY_URL}
+      SPARKY_API_KEY: ${SPARKY_API_KEY:?set SPARKY_API_KEY}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-60}
+    volumes:
+      - renpho-state:/data
+
+volumes:
+  renpho-state:
