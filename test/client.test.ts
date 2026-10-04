@@ -67,3 +67,28 @@ describe('extractRecords', () => {
     expect(extractRecords(null)).toEqual([]);
   });
 });
+
+describe('large integer ids', () => {
+  it('keeps 19-digit user ids exact and does not touch strings or small numbers', async () => {
+    const { parseJsonKeepingBigInts } = await import('../src/crypto.js');
+    const out = parseJsonKeepingBigInts<Record<string, unknown>>(
+      '{"id":1616785610291582123,"note":"x 1616785610291582123 y","ts":1740830400,"w":80.25,"ids":[1616785610291582124]}'
+    );
+    expect(out).toEqual({ id: '1616785610291582123', note: 'x 1616785610291582123 y', ts: 1740830400, w: 80.25, ids: ['1616785610291582124'] });
+  });
+
+  it('sends the exact user id to RENPHO', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { fetchFn } = fakeCloud({
+      'renpho-aggregation/user/login': () => ({ code: 101, msg: 'success', data: aesEncrypt('{"login":{"token":"t","id":1616785610291582123}}') }),
+      'renpho-aggregation/device/count': () => ok({ scale: [{ tableName: 't', count: 1, userIds: [] }] }),
+      'RenphoHealth/scale/queryBodyCompositionMeasureData': (b) => {
+        seen.push(b);
+        return ok([]);
+      },
+      'RenphoHealth/scale/queryAllMeasureDataList': () => ok([]),
+    });
+    await new RenphoClient('a', 'b', fetchFn).getScaleMeasurements();
+    expect(seen[0]?.userIds).toEqual(['1616785610291582123']);
+  });
+});

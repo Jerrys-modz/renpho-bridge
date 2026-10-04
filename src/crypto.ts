@@ -18,6 +18,17 @@ export function encryptRequest(obj: unknown): { encryptData: string } {
   return { encryptData: aesEncrypt(JSON.stringify(obj)) };
 }
 
+/**
+ * RENPHO user ids are integers beyond 2^53 (e.g. 1616785610291582xxx). JSON.parse would round them to a
+ * different number, so quote any 16+ digit integer first and keep it as an exact string.
+ */
+export function parseJsonKeepingBigInts<T = unknown>(text: string): T {
+  const quoted = text.replace(/("(?:[^"\\]|\\.)*")|(-?\d{16,})(?![\d.eE])/g, (m, str: string | undefined) =>
+    str ? m : `"${m}"`
+  );
+  return JSON.parse(quoted) as T;
+}
+
 export function decryptResponse<T = unknown>(b64: string): T {
-  return JSON.parse(aesDecrypt(b64)) as T;
+  return parseJsonKeepingBigInts<T>(aesDecrypt(b64));
 }
