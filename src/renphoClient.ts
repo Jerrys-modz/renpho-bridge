@@ -1,4 +1,4 @@
-import { decryptResponse, encryptRequest } from './crypto.js';
+import { aesEncrypt, decryptResponse, encryptRequest } from './crypto.js';
 
 const API_BASE_URL = 'https://cloud.renpho.com';
 const APP_VERSION = '6.6.0';
@@ -13,13 +13,19 @@ const BODY_WEIGHT_SCALES = [
 const ENDPOINTS = {
   login: 'renpho-aggregation/user/login',
   girth: 'RenphoHealth/renpho/girth/queryAllGirthsDataList',
+  deviceInfo: 'renpho-aggregation/device/count',
   bodyComposition: 'RenphoHealth/scale/queryBodyCompositionMeasureData',
   scale: 'RenphoHealth/scale/queryAllMeasureDataList',
 } as const;
 
-const MEASUREMENT_TABLE_SHARDS = 24;
 
 export type RenphoRecord = Record<string, unknown>;
+
+interface DeviceScale {
+  tableName?: string;
+  count?: number;
+  userIds?: (string | number)[];
+}
 
 interface ApiResponse {
   code?: string | number;
@@ -44,9 +50,11 @@ export function extractRecords(data: unknown): RenphoRecord[] {
   if (Array.isArray(data)) return data as RenphoRecord[];
   if (data && typeof data === 'object') {
     const obj = data as Record<string, unknown>;
-    for (const key of ['list', 'records', 'rows', 'data']) {
+    for (const key of ['list', 'data', 'records', 'rows', 'measurements']) {
       if (Array.isArray(obj[key])) return obj[key] as RenphoRecord[];
     }
+    // A single bare record.
+    if ('weight' in obj || 'neckValue' in obj) return [obj];
   }
   return [];
 }
@@ -58,7 +66,8 @@ export class RenphoClient {
   constructor(
     private readonly email: string,
     private readonly password: string,
-    private readonly fetchFn: typeof fetch = fetch
+    private readonly fetchFn: typeof fetch = fetch,
+    private readonly verbose = false
   ) {}
 
   private async post(endpoint: string, body: unknown, auth = true): Promise<ApiResponse> {
@@ -118,16 +127,69 @@ export class RenphoClient {
   /** Smart tape measure (body girth) records. */
   async getGirthMeasurements(pageSize = 100): Promise<RenphoRecord[]> {
     if (!this.token) await this.login();
-    return this.paginate(ENDPOINTS.girth, {}, pageSize);
+    const records = await this.paginate(ENDPOINTS.girth, {}, pageSize);
+    this.debug(`tape measure endpoint: ${records.length} record(s)`);
+    return records;
   }
 
-  /** Scale records for the logged-in user (shard table is `user_id % 24`). */
+  private debug(message: string): void {
+    if (this.verbose) console.log(`[debug] ${message}`);
+  }
+
+  /** Per-scale table names, record counts and linked user ids, as reported by the account. */
+  async getDeviceInfo(): Promise<{ scale?: DeviceScale[] }> {
+    // The app sends an encrypted empty byte array here; some accounts only answer to an empty object.
+    const bodies = [{ encryptData: aesEncrypt('') }, encryptRequest({})];
+    let result: ApiResponse | undefined;
+    for (const [i, body] of bodies.entries()) {
+      try {
+        result = await this.post(ENDPOINTS.deviceInfo, body);
+        break;
+      } catch (err) {
+        this.debug(`device info attempt ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
+        if (i === bodies.length - 1) throw err;
+      }
+    }
+    if (!result) throw new RenphoApiError('GetDeviceInfo', null, 'no response');
+    checkResponse(result, 'GetDeviceInfo');
+    return decryptResponse<{ scale?: DeviceScale[] }>(result.data ?? '');
+  }
+
+  /**
+   * Scale records. Table names and user ids come from the account's device info (the authoritative source).
+   * Each table is read from the body-composition endpoint first, then the legacy one, because accounts
+   * differ in which of the two holds the rows and the reported count is often 0 for impedance scales.
+   */
   async getScaleMeasurements(pageSize = 50): Promise<RenphoRecord[]> {
     if (!this.token) await this.login();
-    const tableName = `measurements_info_${Number(this.userId) % MEASUREMENT_TABLE_SHARDS}`;
-    const extra = { userIds: [String(this.userId)], tableName };
-    const records = await this.paginate(ENDPOINTS.bodyComposition, extra, pageSize);
-    // Some accounts only have rows on the legacy endpoint.
-    return records.length > 0 ? records : this.paginate(ENDPOINTS.scale, extra, pageSize);
+    const info = await this.getDeviceInfo();
+    const scales = info.scale ?? [];
+    this.debug(
+      `device info: ${scales.length} scale table(s) ${JSON.stringify(
+        scales.map((sc) => ({ table: sc.tableName, count: sc.count, users: sc.userIds?.length ?? 0 }))
+      )}; account userId ${this.userId}`
+    );
+
+    const all: RenphoRecord[] = [];
+    const seen = new Set<string>();
+    for (const sc of scales) {
+      if (!sc.tableName) continue;
+      const linked = (sc.userIds ?? []).map(String);
+      const uid = linked.length > 0 && !linked.includes(String(this.userId)) ? linked[0] : String(this.userId);
+      const extra = { userIds: [uid], tableName: sc.tableName };
+      let records = await this.paginate(ENDPOINTS.bodyComposition, extra, pageSize);
+      this.debug(`${sc.tableName} body-composition endpoint: ${records.length} record(s)`);
+      if (records.length === 0) {
+        records = await this.paginate(ENDPOINTS.scale, extra, pageSize);
+        this.debug(`${sc.tableName} legacy endpoint: ${records.length} record(s)`);
+      }
+      for (const rec of records) {
+        const key = `${sc.tableName}:${String(rec.id ?? rec.timeStamp)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        all.push(rec);
+      }
+    }
+    return all;
   }
 }
