@@ -7,7 +7,9 @@ COPY src ./src
 RUN npm run build
 
 FROM node:22-alpine
-ENV NODE_ENV=production \
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA \
+    NODE_ENV=production \
     STATE_PATH=/data/state.json \
     SYNC_INTERVAL_MINUTES=60
 WORKDIR /app

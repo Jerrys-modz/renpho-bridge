@@ -19,11 +19,15 @@ const sinceArg = process.argv.find((a) => a.startsWith('--since='))?.slice(8);
 // Test mode: read from RENPHO and print what would be sent; never contacts SparkyFitness or writes state.
 const dryRun = args.has('--dry-run') || args.has('--test') || ['1', 'true', 'yes'].includes((process.env.TEST_MODE ?? '').toLowerCase());
 
+const debugOn = args.has('--debug') || ['1', 'true', 'yes'].includes((process.env.DEBUG ?? '').toLowerCase());
 const renpho = new RenphoClient(
   required('RENPHO_EMAIL'),
   required('RENPHO_PASSWORD'),
   fetch,
-  args.has('--debug') || ['1', 'true', 'yes'].includes((process.env.DEBUG ?? '').toLowerCase())
+  debugOn
+);
+console.log(
+  `renpho-bridge build ${(process.env.GIT_SHA ?? 'dev').slice(0, 7)} | test mode: ${dryRun ? 'on' : 'off'} | debug: ${debugOn ? 'on' : 'off'}`
 );
 const sparky = dryRun
   ? new SparkyClient('', '')
