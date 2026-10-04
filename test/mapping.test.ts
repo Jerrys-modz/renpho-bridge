@@ -63,12 +63,23 @@ describe('mapScaleRecord', () => {
     expect(out.map((e) => e.type)).toEqual(['weight', 'body_fat', 'body_water_percentage', 'bmr']);
   });
 
-  it('maps the remaining scale metrics as custom measurements and skips zeros', () => {
+  it('maps muscle/bone to the native kg fields and the rest as custom measurements (values from a real record)', () => {
     const out = mapScaleRecord({
-      timeStamp: 1740830400, timeZone: '0', weight: 80,
-      bmi: 24.5, muscle: 40.1, bone: 4.2, visfat: 8, subfat: 17.3, protein: 18, bodyage: 35,
-      sinew: 62, fatFreeWeight: 65, heartRate: 61, bodyShape: 3, cardiacIndex: 0,
+      timeStamp: 1740830400, timeZone: '0', weight: 107.1, bodyfat: 20.5, water: 57.4, bmr: 2208,
+      bmi: 34.2, muscle: 51.3, bone: 4.25, visfat: 16, subfat: 16.3, protein: 18.1, bodyage: 33,
+      sinew: 80.8, fatFreeWeight: 85.1, heartRate: 0, bodyShape: 3,
     });
+    const byType = Object.fromEntries(out.map((e) => [e.type, [e.value, e.unit]]));
+    expect(byType).toMatchObject({
+      muscle_mass_kg: [80.8, 'kg'],
+      bone_mass_kg: [4.25, 'kg'],
+      'Skeletal Muscle Percentage': [51.3, '%'],
+      'Metabolic Age': [33, 'years'],
+      'Fat Free Weight': [85.1, 'kg'],
+    });
+    expect(byType).not.toHaveProperty('Scale Heart Rate'); // 0 means not measured
+    expect(byType).not.toHaveProperty('Lean Body Mass');
+  });
     expect(Object.fromEntries(out.map((e) => [e.type, e.value]))).toEqual({
       weight: 80, BMI: 24.5, 'Muscle Mass': 40.1, 'Bone Mass': 4.2, 'Visceral Fat': 8, 'Subcutaneous Fat': 17.3,
       Protein: 18, 'Body Age': 35, 'Lean Body Mass': 62, 'Fat Free Weight': 65, 'Scale Heart Rate': 61,

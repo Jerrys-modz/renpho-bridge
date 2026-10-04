@@ -99,13 +99,11 @@ export function mapGirthRecord(rec: RenphoRecord, customUnit: LengthUnit = 'cm')
 
 const EXTRA_SCALE_METRICS: readonly [field: string, name: string, unit: string][] = [
   ['bmi', 'BMI', ''],
-  ['muscle', 'Muscle Mass', '%'],
-  ['bone', 'Bone Mass', '%'],
+  ['muscle', 'Skeletal Muscle Percentage', '%'],
   ['visfat', 'Visceral Fat', 'level'],
   ['subfat', 'Subcutaneous Fat', '%'],
   ['protein', 'Protein', '%'],
-  ['bodyage', 'Body Age', 'years'],
-  ['sinew', 'Lean Body Mass', 'kg'],
+  ['bodyage', 'Metabolic Age', 'years'],
   ['fatFreeWeight', 'Fat Free Weight', 'kg'],
   ['heartRate', 'Scale Heart Rate', 'bpm'],
 ];
@@ -122,9 +120,12 @@ export function mapScaleRecord(rec: RenphoRecord): HealthEntry[] {
   add('body_fat', 'bodyfat', '%', 100);
   add('body_water_percentage', 'water', '%', 100);
   add('bmr', 'bmr', 'kcal');
-  // Everything else the scale records has no dedicated SparkyFitness field, so it becomes a custom
-  // measurement (category auto-created). Muscle and bone are percentages here, not the kg the native
-  // `muscle_mass_kg` / `bone_mass_kg` fields expect, so they stay custom rather than being guessed into kg.
+  // Field meanings verified against the RENPHO app: `sinew` is the app's "Muscle Mass" (kg), `bone` is Bone
+  // Mass (kg), and `muscle` is the Skeletal Muscle *percentage*. The reference client labels these wrongly.
+  add('muscle_mass_kg', 'sinew', 'kg');
+  add('bone_mass_kg', 'bone', 'kg');
+  // Everything else has no dedicated SparkyFitness field, so it becomes a custom measurement
+  // (category auto-created).
   for (const [field, name, unit] of EXTRA_SCALE_METRICS) add(name, field, unit);
   return entries;
 }
