@@ -80,9 +80,4 @@ describe('mapScaleRecord', () => {
     expect(byType).not.toHaveProperty('Scale Heart Rate'); // 0 means not measured
     expect(byType).not.toHaveProperty('Lean Body Mass');
   });
-    expect(Object.fromEntries(out.map((e) => [e.type, e.value]))).toEqual({
-      weight: 80, BMI: 24.5, 'Muscle Mass': 40.1, 'Bone Mass': 4.2, 'Visceral Fat': 8, 'Subcutaneous Fat': 17.3,
-      Protein: 18, 'Body Age': 35, 'Lean Body Mass': 62, 'Fat Free Weight': 65, 'Scale Heart Rate': 61,
-    });
-  });
 });
