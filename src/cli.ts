@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import type { LengthUnit } from './mapping.js';
 import { RenphoClient } from './renphoClient.js';
 import { SparkyClient } from './sparkyClient.js';
 import { runSync } from './sync.js';
@@ -19,11 +20,12 @@ const renpho = new RenphoClient(required('RENPHO_EMAIL'), required('RENPHO_PASSW
 const sparky = new SparkyClient(required('SPARKY_URL'), required('SPARKY_API_KEY'));
 
 const intervalMinutes = Number(process.env.SYNC_INTERVAL_MINUTES ?? 0);
-const lengthUnit = (process.env.LENGTH_UNIT ?? 'cm').toLowerCase();
-if (lengthUnit !== 'cm' && lengthUnit !== 'in') {
+const rawUnit = (process.env.LENGTH_UNIT ?? 'cm').toLowerCase();
+if (rawUnit !== 'cm' && rawUnit !== 'in') {
   console.error('LENGTH_UNIT must be "cm" or "in".');
   process.exit(2);
 }
+const lengthUnit: LengthUnit = rawUnit;
 const dryRun = args.has('--dry-run');
 
 async function once(): Promise<boolean> {
