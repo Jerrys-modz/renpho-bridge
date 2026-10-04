@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { mapGirthRecord, mapScaleRecord, recordId, type HealthEntry, type LengthUnit } from './mapping.js';
+import { mapGirthRecord, mapScaleRecord, type HealthEntry, type LengthUnit } from './mapping.js';
 import type { RenphoClient, RenphoRecord } from './renphoClient.js';
 import type { SparkyClient } from './sparkyClient.js';
 
@@ -8,50 +8,91 @@ export interface SyncOptions {
   includeTape: boolean;
   statePath: string;
   dryRun: boolean;
-  /** Only records on/after this YYYY-MM-DD are synced. */
+  /** Days of recent data re-sent on every run after the initial full sync (default 3). */
+  syncDays?: number;
+  /** Ignore saved state and send the full history again. */
+  fullSync?: boolean;
+  /** Only records on/after this YYYY-MM-DD are sent (also limits the initial full sync). */
   since?: string;
   /** Unit for custom-measurement tape sites (default cm). */
   lengthUnit?: LengthUnit;
+  /** Injectable clock for tests. */
+  now?: Date;
 }
 
-async function loadState(path: string): Promise<Set<string>> {
+export interface SyncResult {
+  mode: 'full' | 'window';
+  /** Earliest day (YYYY-MM-DD) included, if any. */
+  cutoff?: string;
+  fetched: { tape: number; scale: number };
+  /** Fetched records that produced nothing (no usable timestamp, no values, or outside the window). */
+  skipped: number;
+  entries: number;
+  sent: number;
+  errors: unknown[];
+  pending: HealthEntry[];
+}
+
+interface State {
+  initialSyncDone: boolean;
+  lastSync?: string;
+}
+
+async function loadState(path: string): Promise<State> {
   try {
-    return new Set(JSON.parse(await readFile(path, 'utf8')) as string[]);
+    const raw: unknown = JSON.parse(await readFile(path, 'utf8'));
+    // An array is the earlier id-list format, which also implies a completed first sync.
+    if (Array.isArray(raw)) return { initialSyncDone: true };
+    if (raw && typeof raw === 'object' && (raw as State).initialSyncDone === true) return raw as State;
   } catch {
-    return new Set();
+    // missing or unreadable state means the initial sync hasn't happened
   }
+  return { initialSyncDone: false };
 }
 
+export function daysAgo(now: Date, days: number): string {
+  return new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Like the mobile app: the first run sends all history once; every run after that re-sends only the last
+ * `syncDays` days. Re-sending is safe because SparkyFitness upserts check-in fields and custom measurements
+ * by day, so it picks up edits and late-arriving records without duplicating.
+ */
 export async function runSync(
   renpho: Pick<RenphoClient, 'getGirthMeasurements' | 'getScaleMeasurements'>,
   sparky: Pick<SparkyClient, 'send'>,
   opts: SyncOptions
-): Promise<{ records: number; entries: number; sent: number; errors: unknown[]; pending: HealthEntry[] }> {
-  const seen = await loadState(opts.statePath);
-  const fresh: { id: string; entries: HealthEntry[] }[] = [];
+): Promise<SyncResult> {
+  const now = opts.now ?? new Date();
+  const state = await loadState(opts.statePath);
+  const full = opts.fullSync === true || !state.initialSyncDone;
+  const windowStart = full ? undefined : daysAgo(now, opts.syncDays ?? 3);
+  const cutoff = [windowStart, opts.since].filter((d): d is string => !!d).sort().pop();
 
-  const collect = (kind: 'girth' | 'scale', records: RenphoRecord[], map: (r: RenphoRecord) => HealthEntry[]) => {
+  const entries: HealthEntry[] = [];
+  const fetched = { tape: 0, scale: 0 };
+  let skipped = 0;
+
+  const collect = (kind: 'tape' | 'scale', records: RenphoRecord[], map: (r: RenphoRecord) => HealthEntry[]) => {
+    fetched[kind] += records.length;
     for (const rec of records) {
-      const id = recordId(kind, rec);
-      if (!id || seen.has(id)) continue;
-      const entries = map(rec).filter((e) => !opts.since || e.date >= opts.since);
-      if (entries.length > 0) fresh.push({ id, entries });
+      const mapped = map(rec).filter((e) => !cutoff || e.date >= cutoff);
+      if (mapped.length === 0) skipped++;
+      entries.push(...mapped);
     }
   };
 
-  if (opts.includeTape) collect('girth', await renpho.getGirthMeasurements(), (r) => mapGirthRecord(r, opts.lengthUnit));
+  if (opts.includeTape) collect('tape', await renpho.getGirthMeasurements(), (r) => mapGirthRecord(r, opts.lengthUnit));
   if (opts.includeScale) collect('scale', await renpho.getScaleMeasurements(), mapScaleRecord);
 
-  const entries = fresh.flatMap((f) => f.entries);
-  if (opts.dryRun || entries.length === 0) {
-    return { records: fresh.length, entries: entries.length, sent: 0, errors: [], pending: entries };
-  }
+  const base = { mode: full ? ('full' as const) : ('window' as const), cutoff, fetched, skipped, entries: entries.length };
+  if (opts.dryRun) return { ...base, sent: 0, errors: [], pending: entries };
 
-  const { sent, errors } = await sparky.send(entries);
-  // Only mark records done when the whole batch went through; failed ones retry next run.
-  if (errors.length === 0) {
-    for (const f of fresh) seen.add(f.id);
-    await writeFile(opts.statePath, JSON.stringify([...seen], null, 2));
+  const { sent, errors } = entries.length > 0 ? await sparky.send(entries) : { sent: 0, errors: [] };
+  // The initial sync only counts as done once everything was accepted; otherwise the next run retries it.
+  if (full && errors.length === 0) {
+    await writeFile(opts.statePath, JSON.stringify({ initialSyncDone: true, lastSync: now.toISOString() }, null, 2));
   }
-  return { records: fresh.length, entries: entries.length, sent, errors, pending: [] };
+  return { ...base, sent, errors, pending: [] };
 }

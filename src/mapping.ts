@@ -42,12 +42,6 @@ export function recordTime(rec: RenphoRecord): { date: string; timestamp: string
   };
 }
 
-/** Stable identity for de-duplication across runs. */
-export function recordId(kind: 'girth' | 'scale', rec: RenphoRecord): string | null {
-  const id = rec.id ?? rec.timeStamp;
-  return id === undefined || id === null ? null : `${kind}:${String(id)}`;
-}
-
 // Girth sites with a dedicated SparkyFitness check-in field.
 const NATIVE_GIRTH: Record<string, string> = { neckValue: 'neck', waistValue: 'waist', hipValue: 'hips' };
 

@@ -24,6 +24,12 @@ const sparky = dryRun
   ? new SparkyClient('', '')
   : new SparkyClient(required('SPARKY_URL'), required('SPARKY_API_KEY'));
 
+const syncDays = Number(process.env.SYNC_DAYS ?? 3);
+if (!Number.isInteger(syncDays) || syncDays < 1) {
+  console.error('SYNC_DAYS must be a whole number of days, 1 or more.');
+  process.exit(2);
+}
+const fullSync = args.has('--full') || ['1', 'true', 'yes'].includes((process.env.FULL_SYNC ?? '').toLowerCase());
 const intervalMinutes = Number(process.env.SYNC_INTERVAL_MINUTES ?? 0);
 const rawUnit = (process.env.LENGTH_UNIT ?? 'cm').toLowerCase();
 if (rawUnit !== 'cm' && rawUnit !== 'in') {
@@ -38,7 +44,9 @@ async function once(): Promise<boolean> {
     includeScale: !args.has('--tape-only'),
     dryRun,
     statePath: process.env.STATE_PATH ?? 'state.json',
-    since: sinceArg,
+    since: sinceArg ?? process.env.SINCE_DATE,
+    syncDays,
+    fullSync,
     lengthUnit,
   });
   if (dryRun) {
@@ -47,8 +55,11 @@ async function once(): Promise<boolean> {
       console.log(`  ${e.date}  ${e.type.padEnd(22)} ${String(e.value).padStart(8)} ${e.unit ?? ''}  (${e.timestamp})`);
     }
   }
+  const stamp = new Date().toISOString();
   console.log(
-    `${new Date().toISOString()} ${result.records} new RENPHO record(s) -> ${result.entries} entr${result.entries === 1 ? 'y' : 'ies'}` +
+    `${stamp} ${result.mode === 'full' ? 'initial full sync' : `last ${syncDays} days`}` +
+      `${result.cutoff ? ` (from ${result.cutoff})` : ''}: RENPHO returned ${result.fetched.tape} tape and ` +
+      `${result.fetched.scale} scale record(s), ${result.skipped} had nothing to send -> ${result.entries} entr${result.entries === 1 ? 'y' : 'ies'}` +
       (dryRun ? ' (test mode, nothing sent)' : `, ${result.sent} accepted`)
   );
   if (result.errors.length > 0) {

@@ -10,6 +10,9 @@ services:
       SPARKY_URL: ${SPARKY_URL:-}
       SPARKY_API_KEY: ${SPARKY_API_KEY:-}
       LENGTH_UNIT: ${LENGTH_UNIT:-cm}
+      SYNC_DAYS: ${SYNC_DAYS:-3}
+      FULL_SYNC: ${FULL_SYNC:-false}
+      SINCE_DATE: ${SINCE_DATE:-}
       SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-60}
     volumes:
       - renpho-state:/data
