@@ -40,6 +40,13 @@ describe('mapGirthRecord', () => {
   });
 });
 
+describe('tape waist-to-hip ratio', () => {
+  it('is included when present', () => {
+    const out = mapGirthRecord({ timeStamp: 1740830400, timeZone: '0', whrValue: '0.85' });
+    expect(out).toMatchObject([{ type: 'Waist-to-Hip Ratio', value: 0.85 }]);
+  });
+});
+
 describe('mapGirthRecord with inches', () => {
   it('keeps native sites in cm and converts custom sites', () => {
     const out = mapGirthRecord({ timeStamp: 1740830400, timeZone: '0', waistValue: 80, waistUnit: 0, chestValue: 101.6, chestUnit: 0 }, 'in');
@@ -54,5 +61,17 @@ describe('mapScaleRecord', () => {
   it('maps weight, body fat, water and bmr', () => {
     const out = mapScaleRecord({ timeStamp: 1740830400, timeZone: '0', weight: 80.2, bodyfat: 18.5, water: 55, bmr: 1700, muscle: 0 });
     expect(out.map((e) => e.type)).toEqual(['weight', 'body_fat', 'body_water_percentage', 'bmr']);
+  });
+
+  it('maps the remaining scale metrics as custom measurements and skips zeros', () => {
+    const out = mapScaleRecord({
+      timeStamp: 1740830400, timeZone: '0', weight: 80,
+      bmi: 24.5, muscle: 40.1, bone: 4.2, visfat: 8, subfat: 17.3, protein: 18, bodyage: 35,
+      sinew: 62, fatFreeWeight: 65, heartRate: 61, bodyShape: 3, cardiacIndex: 0,
+    });
+    expect(Object.fromEntries(out.map((e) => [e.type, e.value]))).toEqual({
+      weight: 80, BMI: 24.5, 'Muscle Mass': 40.1, 'Bone Mass': 4.2, 'Visceral Fat': 8, 'Subcutaneous Fat': 17.3,
+      Protein: 18, 'Body Age': 35, 'Lean Body Mass': 62, 'Fat Free Weight': 65, 'Scale Heart Rate': 61,
+    });
   });
 });

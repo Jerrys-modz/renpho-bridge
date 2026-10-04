@@ -75,6 +75,10 @@ export function mapGirthRecord(rec: RenphoRecord, customUnit: LengthUnit = 'cm')
   if (!when) return [];
   const entries: HealthEntry[] = [];
   const fields = { ...NATIVE_GIRTH, ...CUSTOM_GIRTH };
+  const whr = num(rec.whrValue);
+  if (whr !== null && whr > 0) {
+    entries.push({ type: 'Waist-to-Hip Ratio', value: whr, unit: '', ...when, source: 'renpho' });
+  }
   for (const [field, name] of Object.entries(fields)) {
     const raw = num(rec[field]);
     if (raw === null || raw <= 0) continue; // unmeasured sites come back as 0
@@ -93,6 +97,19 @@ export function mapGirthRecord(rec: RenphoRecord, customUnit: LengthUnit = 'cm')
   return entries;
 }
 
+const EXTRA_SCALE_METRICS: readonly [field: string, name: string, unit: string][] = [
+  ['bmi', 'BMI', ''],
+  ['muscle', 'Muscle Mass', '%'],
+  ['bone', 'Bone Mass', '%'],
+  ['visfat', 'Visceral Fat', 'level'],
+  ['subfat', 'Subcutaneous Fat', '%'],
+  ['protein', 'Protein', '%'],
+  ['bodyage', 'Body Age', 'years'],
+  ['sinew', 'Lean Body Mass', 'kg'],
+  ['fatFreeWeight', 'Fat Free Weight', 'kg'],
+  ['heartRate', 'Scale Heart Rate', 'bpm'],
+];
+
 export function mapScaleRecord(rec: RenphoRecord): HealthEntry[] {
   const when = recordTime(rec);
   if (!when) return [];
@@ -105,5 +122,9 @@ export function mapScaleRecord(rec: RenphoRecord): HealthEntry[] {
   add('body_fat', 'bodyfat', '%', 100);
   add('body_water_percentage', 'water', '%', 100);
   add('bmr', 'bmr', 'kcal');
+  // Everything else the scale records has no dedicated SparkyFitness field, so it becomes a custom
+  // measurement (category auto-created). Muscle and bone are percentages here, not the kg the native
+  // `muscle_mass_kg` / `bone_mass_kg` fields expect, so they stay custom rather than being guessed into kg.
+  for (const [field, name, unit] of EXTRA_SCALE_METRICS) add(name, field, unit);
   return entries;
 }

@@ -67,6 +67,9 @@ saves state, so it keeps showing the full history until a real run completes.
 | Tape: neck, waist, hip | check-in `neck`, `waist`, `hips` (cm) |
 | Tape: shoulder, chest, abdomen, arm (and left/right), thigh, calf | custom measurements (cm), categories auto-created |
 | Scale: weight, body fat %, body water %, BMR | check-in `weight`, `body_fat`, `body_water_percentage`, `bmr` |
+| Scale: BMI, muscle %, bone %, visceral fat, subcutaneous fat %, protein %, body age, lean body mass, fat-free weight, heart rate | custom measurements (units as RENPHO reports them: %, kg, level, years, bpm) |
+| Tape: waist-to-hip ratio | custom measurement (unitless) |
+| Tape: the five user-defined "custom" slots | not synced (RENPHO doesn't expose their names) |
 
 Units: whatever unit the RENPHO app displays, each record carries its own unit code and the tool converts to
 cm first. neck/waist/hips are always sent in cm, because SparkyFitness stores them in cm and shows them in the
