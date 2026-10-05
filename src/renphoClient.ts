@@ -15,6 +15,7 @@ const ENDPOINTS = {
   login: 'renpho-aggregation/user/login',
   girth: 'RenphoHealth/renpho/girth/queryAllGirthsDataList',
   deviceInfo: 'renpho-aggregation/device/count',
+  tokenTime: 'RenphoHealth/app/sync/getTokenTime',
   bodyComposition: 'RenphoHealth/scale/queryBodyCompositionMeasureData',
   scale: 'RenphoHealth/scale/queryAllMeasureDataList',
 } as const;
@@ -45,6 +46,11 @@ interface ApiResponse {
   code?: string | number;
   msg?: string;
   data?: string;
+}
+
+/** JSON for debug logs with anything token-like masked. */
+function redact(value: unknown): string {
+  return JSON.stringify(value, (key, v: unknown) => (/token/i.test(key) && typeof v === 'string' ? '[redacted]' : v));
 }
 
 export class RenphoApiError extends Error {
@@ -79,6 +85,7 @@ export class RenphoClient {
   private loginAt: string | null = null;
   /** True while the token came from the saved session and hasn't been re-validated by a fresh login. */
   private usingSaved = false;
+  private probed = false;
 
   constructor(
     private readonly email: string,
@@ -150,6 +157,10 @@ export class RenphoClient {
         await this.login();
       }
     }
+    if (!this.probed) {
+      this.probed = true;
+      await this.probeTokenTime();
+    }
     if (!this.usingSaved) return read();
     try {
       const records = await read();
@@ -189,6 +200,32 @@ export class RenphoClient {
       this.debug(`tape measure endpoint: ${records.length} record(s)`);
       return records;
     });
+  }
+
+  /**
+   * Debug only: the reference client lists a `getTokenTime` endpoint but never calls it. Log what it answers
+   * so we can learn whether it reports token validity/expiry. Never throws and never prints the token itself.
+   */
+  private async probeTokenTime(): Promise<void> {
+    if (!this.verbose || !this.token) return;
+    const bodies = [{ encryptData: aesEncrypt('') }, encryptRequest({})];
+    for (const [i, body] of bodies.entries()) {
+      try {
+        const res = await this.post(ENDPOINTS.tokenTime, body);
+        let data: unknown = null;
+        if (res.data) {
+          try {
+            data = decryptResponse(res.data);
+          } catch {
+            data = '(could not decrypt)';
+          }
+        }
+        this.debug(`getTokenTime (body ${i + 1}): code=${String(res.code)} msg=${String(res.msg)} data=${redact(data)}`);
+        return;
+      } catch (err) {
+        this.debug(`getTokenTime (body ${i + 1}) failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 
   private debug(message: string): void {

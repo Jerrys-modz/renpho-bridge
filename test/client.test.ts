@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { aesDecrypt, aesEncrypt } from '../src/crypto.js';
 import { extractRecords, RenphoClient } from '../src/renphoClient.js';
 
@@ -159,5 +159,44 @@ describe('session reuse', () => {
     const { fetchFn } = fakeCloud({ ...scaleRoutes(counter), 'RenphoHealth/renpho/girth/queryAllGirthsDataList': () => ok([]) });
     await new RenphoClient('a', 'b', fetchFn, false, store).getGirthMeasurements();
     expect(counter.logins).toBe(1);
+  });
+});
+
+describe('getTokenTime debug probe', () => {
+  const routes = (seen: string[]) => ({
+    'renpho-aggregation/user/login': login,
+    'RenphoHealth/app/sync/getTokenTime': () => {
+      seen.push('probe');
+      return ok({ expireTime: 123, token: 'secret-token-value' });
+    },
+    'RenphoHealth/renpho/girth/queryAllGirthsDataList': () => ok([{ id: 1, timeStamp: 1, waistValue: 80 }]),
+  });
+
+  it('is skipped unless debug is on', async () => {
+    const seen: string[] = [];
+    const { fetchFn } = fakeCloud(routes(seen));
+    await new RenphoClient('a', 'b', fetchFn, false).getGirthMeasurements();
+    expect(seen).toEqual([]);
+  });
+
+  it('logs the answer with tokens redacted and never breaks the sync', async () => {
+    const seen: string[] = [];
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((m: string) => void logs.push(String(m)));
+    const { fetchFn } = fakeCloud(routes(seen));
+    const records = await new RenphoClient('a', 'b', fetchFn, true).getGirthMeasurements();
+    spy.mockRestore();
+    expect(records).toHaveLength(1);
+    const line = logs.find((l) => l.includes('getTokenTime')) ?? '';
+    expect(line).toContain('expireTime');
+    expect(line).not.toContain('secret-token-value');
+  });
+
+  it('survives the endpoint failing', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { fetchFn } = fakeCloud({ ...routes([]), 'RenphoHealth/app/sync/getTokenTime': () => undefined as never });
+    const records = await new RenphoClient('a', 'b', fetchFn, true).getGirthMeasurements();
+    spy.mockRestore();
+    expect(records).toHaveLength(1);
   });
 });

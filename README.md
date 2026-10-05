@@ -30,7 +30,7 @@ It is a standalone tool and needs no changes to SparkyFitness.
 
 **Test mode:** `--dry-run` (alias `--test`) or `TEST_MODE=true` logs in to RENPHO, reads your data and prints every entry that would be sent (date, type, value, unit), without contacting SparkyFitness or saving state, so `SPARKY_URL` / `SPARKY_API_KEY` aren't needed.  It shows what the next real run would send (the full history until the first real sync completes, then the last `SYNC_DAYS` days). In Docker, set `TEST_MODE=true` in `.env` and watch `docker compose logs`.
 
-**Debugging:** `--debug` or `DEBUG=true` also logs what RENPHO's account reports: scale table names and counts, and how many records each endpoint returned. It logs counts only, never your measurement values.
+**Debugging:** `--debug` or `DEBUG=true` also logs what RENPHO's account reports: scale table names and counts, and how many records each endpoint returned. It logs counts only, never your measurement values. With debug on it also calls RENPHO's `getTokenTime` endpoint once per run and logs the response (tokens masked), to help work out how long a session lasts.
 
 Flags: `--debug`, `--full`, `--dry-run`/`--test`, `--tape-only`, `--scale-only`, `--since=YYYY-MM-DD`.
 
