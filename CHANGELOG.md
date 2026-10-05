@@ -3,7 +3,7 @@
 All notable changes are listed here. To publish a release, update this file and push a tag such as `v0.1.0`;
 the Release workflow creates the GitHub release and the Docker workflow publishes the image tags.
 
-## Unreleased
+## 0.1.0 - 2026-10-05
 
 ### Added
 - Sync of RENPHO smart tape measure and scale data into SparkyFitness through `POST /api/health-data`.
