@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import type { LengthUnit } from './mapping.js';
+import { dirname, join } from 'node:path';
+import { fileSessionStore } from './sessionStore.js';
 import { RenphoClient } from './renphoClient.js';
 import { SparkyClient } from './sparkyClient.js';
 import { runSync } from './sync.js';
@@ -24,7 +26,8 @@ const renpho = new RenphoClient(
   required('RENPHO_EMAIL'),
   required('RENPHO_PASSWORD'),
   fetch,
-  debugOn
+  debugOn,
+  fileSessionStore(process.env.SESSION_PATH ?? join(dirname(process.env.STATE_PATH ?? 'state.json'), 'session.json'))
 );
 console.log(
   `renpho-bridge build ${(process.env.GIT_SHA ?? 'dev').slice(0, 7)} | test mode: ${dryRun ? 'on' : 'off'} | debug: ${debugOn ? 'on' : 'off'}`

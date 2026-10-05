@@ -92,3 +92,72 @@ describe('large integer ids', () => {
     expect(seen[0]?.userIds).toEqual(['1616785610291582123']);
   });
 });
+
+describe('session reuse', () => {
+  const memStore = (initial: { token: string; userId: string; loginAt?: string } | null) => {
+    let saved = initial;
+    return { load: async () => saved, save: async (s: typeof saved) => void (saved = s), get: () => saved };
+  };
+  const scaleRoutes = (counter: { logins: number }) => ({
+    'renpho-aggregation/user/login': () => {
+      counter.logins++;
+      return ok({ login: { token: `tok${counter.logins}`, id: 42 } });
+    },
+    'renpho-aggregation/device/count': () => ok({ scale: [{ tableName: 't', count: 1, userIds: [] }] }),
+    'RenphoHealth/scale/queryBodyCompositionMeasureData': (_b: Record<string, unknown>) => ok([{ id: 1, timeStamp: 1, weight: 70 }]),
+    'RenphoHealth/scale/queryAllMeasureDataList': () => ok([]),
+  });
+
+  it('does not log in when a saved session exists and works', async () => {
+    const counter = { logins: 0 };
+    const store = memStore({ token: 'saved', userId: '42', loginAt: new Date().toISOString() });
+    const { fetchFn } = fakeCloud(scaleRoutes(counter));
+    const records = await new RenphoClient('a', 'b', fetchFn, false, store).getScaleMeasurements();
+    expect(records).toHaveLength(1);
+    expect(counter.logins).toBe(0);
+  });
+
+  it('logs in and saves the token when there is no saved session', async () => {
+    const counter = { logins: 0 };
+    const store = memStore(null);
+    const { fetchFn } = fakeCloud(scaleRoutes(counter));
+    await new RenphoClient('a', 'b', fetchFn, false, store).getScaleMeasurements();
+    expect(counter.logins).toBe(1);
+    expect(store.get()).toMatchObject({ token: 'tok1', userId: '42' });
+  });
+
+  it('logs in again once when the saved session is rejected', async () => {
+    const counter = { logins: 0 };
+    const store = memStore({ token: 'stale', userId: '42', loginAt: new Date().toISOString() });
+    const routes = scaleRoutes(counter);
+    let first = true;
+    routes['renpho-aggregation/device/count'] = () => {
+      if (first) {
+        first = false;
+        return { code: 401, msg: 'token invalid' } as never; // API-level rejection
+      }
+      return ok({ scale: [{ tableName: 't', count: 1, userIds: [] }] });
+    };
+    const { fetchFn } = fakeCloud(routes);
+    const records = await new RenphoClient('a', 'b', fetchFn, false, store).getScaleMeasurements();
+    expect(records).toHaveLength(1);
+    expect(counter.logins).toBe(1);
+    expect(store.get()?.token).toBe('tok1');
+  });
+
+  it('an empty result with a fresh saved session does not trigger a login (e.g. no tape measure)', async () => {
+    const counter = { logins: 0 };
+    const store = memStore({ token: 'saved', userId: '42', loginAt: new Date().toISOString() });
+    const { fetchFn } = fakeCloud({ ...scaleRoutes(counter), 'RenphoHealth/renpho/girth/queryAllGirthsDataList': () => ok([]) });
+    expect(await new RenphoClient('a', 'b', fetchFn, false, store).getGirthMeasurements()).toEqual([]);
+    expect(counter.logins).toBe(0);
+  });
+
+  it('an empty result from an old saved session is double-checked with one login', async () => {
+    const counter = { logins: 0 };
+    const store = memStore({ token: 'saved', userId: '42', loginAt: new Date(Date.now() - 3 * 86_400_000).toISOString() });
+    const { fetchFn } = fakeCloud({ ...scaleRoutes(counter), 'RenphoHealth/renpho/girth/queryAllGirthsDataList': () => ok([]) });
+    await new RenphoClient('a', 'b', fetchFn, false, store).getGirthMeasurements();
+    expect(counter.logins).toBe(1);
+  });
+});

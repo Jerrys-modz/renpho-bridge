@@ -60,6 +60,18 @@ upserts these values by day, so edits and late-arriving records are picked up an
 next run retries the full sync. Use `--full` / `FULL_SYNC=true` to redo the full history. Test mode never
 saves state, so it keeps showing the full history until a real run completes.
 
+## Getting logged out of the RENPHO app
+
+Every RENPHO login creates a new session, which can sign the phone app out. To avoid doing that on every
+sync, the tool saves its session token (`session.json` next to the state file, i.e. in the Docker volume,
+readable only by the container user) and reuses it. It only logs in again when the saved token stops working,
+so you may still be signed out of the app occasionally, for example right after the app logs in and replaces
+the tool's session. Ways to reduce it further:
+
+- Sync less often: `SYNC_INTERVAL_MINUTES=720` (twice a day) or `1440` (daily) is plenty for a scale and tape.
+- Use a second RENPHO account for the bridge, if RENPHO lets you share the scale/tape with it (family or
+  shared-device features), so the tool and your phone never share a session. This is untested.
+
 ## Mapping
 
 | RENPHO | SparkyFitness |

@@ -1,5 +1,6 @@
 import { aesEncrypt, decryptResponse, encryptRequest } from './crypto.js';
 
+const EMPTY_RECHECK_MS = 24 * 60 * 60 * 1000;
 const API_BASE_URL = 'https://cloud.renpho.com';
 const APP_VERSION = '6.6.0';
 const PLATFORM = 'android';
@@ -20,6 +21,19 @@ const ENDPOINTS = {
 
 
 export type RenphoRecord = Record<string, unknown>;
+
+export interface Session {
+  token: string;
+  userId: string;
+  /** ISO time of the login that produced this token. */
+  loginAt?: string;
+}
+
+/** Where a login is remembered between runs, so each sync doesn't create a new RENPHO session. */
+export interface SessionStore {
+  load(): Promise<Session | null>;
+  save(session: Session | null): Promise<void>;
+}
 
 interface DeviceScale {
   tableName?: string;
@@ -62,12 +76,16 @@ export function extractRecords(data: unknown): RenphoRecord[] {
 export class RenphoClient {
   private token: string | null = null;
   private userId: string | null = null;
+  private loginAt: string | null = null;
+  /** True while the token came from the saved session and hasn't been re-validated by a fresh login. */
+  private usingSaved = false;
 
   constructor(
     private readonly email: string,
     private readonly password: string,
     private readonly fetchFn: typeof fetch = fetch,
-    private readonly verbose = false
+    private readonly verbose = false,
+    private readonly store?: SessionStore
   ) {}
 
   private async post(endpoint: string, body: unknown, auth = true): Promise<ApiResponse> {
@@ -108,6 +126,46 @@ export class RenphoClient {
     if (!token) throw new RenphoApiError('Login', null, 'No token in login response');
     this.token = token;
     this.userId = String(data.login?.id);
+    this.loginAt = new Date().toISOString();
+    this.usingSaved = false;
+    await this.store?.save({ token, userId: this.userId, loginAt: this.loginAt });
+    this.debug('logged in (new RENPHO session)');
+  }
+
+  /**
+   * Runs a read with the remembered session when there is one. Each RENPHO login creates a new session and
+   * can sign the phone app out, so we only log in again when the saved token stops working (an error, or an
+   * empty result that a fresh login then fills).
+   */
+  private async withSession(read: () => Promise<RenphoRecord[]>): Promise<RenphoRecord[]> {
+    if (!this.token) {
+      const saved = await this.store?.load();
+      if (saved) {
+        this.token = saved.token;
+        this.userId = saved.userId;
+        this.loginAt = saved.loginAt ?? null;
+        this.usingSaved = true;
+        this.debug('reusing saved RENPHO session (no login)');
+      } else {
+        await this.login();
+      }
+    }
+    if (!this.usingSaved) return read();
+    try {
+      const records = await read();
+      if (records.length > 0) return records;
+      // An empty result is normal for an account with no tape measure, so don't log in on every run for it
+      // (that is what signs the phone app out). Re-check with a fresh login at most once a day.
+      const ageMs = this.loginAt ? Date.now() - Date.parse(this.loginAt) : Infinity;
+      if (ageMs < EMPTY_RECHECK_MS) return records;
+      this.debug('saved session is over a day old and returned nothing; logging in again to double-check');
+    } catch (err) {
+      this.debug(`saved session failed (${err instanceof Error ? err.message : String(err)}); logging in again`);
+    }
+    this.token = null;
+    await this.store?.save(null);
+    await this.login();
+    return read();
   }
 
   private async paginate(endpoint: string, extra: Record<string, unknown>, pageSize: number): Promise<RenphoRecord[]> {
@@ -126,10 +184,11 @@ export class RenphoClient {
 
   /** Smart tape measure (body girth) records. */
   async getGirthMeasurements(pageSize = 100): Promise<RenphoRecord[]> {
-    if (!this.token) await this.login();
-    const records = await this.paginate(ENDPOINTS.girth, {}, pageSize);
-    this.debug(`tape measure endpoint: ${records.length} record(s)`);
-    return records;
+    return this.withSession(async () => {
+      const records = await this.paginate(ENDPOINTS.girth, {}, pageSize);
+      this.debug(`tape measure endpoint: ${records.length} record(s)`);
+      return records;
+    });
   }
 
   private debug(message: string): void {
@@ -161,7 +220,10 @@ export class RenphoClient {
    * differ in which of the two holds the rows and the reported count is often 0 for impedance scales.
    */
   async getScaleMeasurements(pageSize = 50): Promise<RenphoRecord[]> {
-    if (!this.token) await this.login();
+    return this.withSession(() => this.readScale(pageSize));
+  }
+
+  private async readScale(pageSize: number): Promise<RenphoRecord[]> {
     const info = await this.getDeviceInfo();
     const scales = info.scale ?? [];
     this.debug(
