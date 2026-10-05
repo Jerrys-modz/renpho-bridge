@@ -200,3 +200,44 @@ describe('getTokenTime debug probe', () => {
     expect(records).toHaveLength(1);
   });
 });
+
+describe('choosing devices', () => {
+  const twoScales = (reads: string[]) => ({
+    'renpho-aggregation/user/login': login,
+    'renpho-aggregation/device/count': () =>
+      ok({ scale: [{ tableName: 'measurements_info_1', count: 3, userIds: [] }, { tableName: 'measurements_info_2', count: 5, userIds: [] }] }),
+    'RenphoHealth/scale/queryBodyCompositionMeasureData': (b: Record<string, unknown>) => {
+      reads.push(String(b.tableName));
+      return ok(b.pageNum === 1 ? [{ id: 1, timeStamp: 1, weight: 70 }] : []);
+    },
+    'RenphoHealth/renpho/girth/queryAllGirthsDataList': () => ok([{ id: 1, timeStamp: 1 }, { id: 2, timeStamp: 2 }]),
+  });
+
+  it('reads only the selected scale tables', async () => {
+    const reads: string[] = [];
+    const { fetchFn } = fakeCloud(twoScales(reads));
+    await new RenphoClient('a', 'b', fetchFn).getScaleMeasurements(50, ['measurements_info_2']);
+    expect(reads).toEqual(['measurements_info_2']);
+  });
+
+  it('reads every scale when none is selected', async () => {
+    const reads: string[] = [];
+    const { fetchFn } = fakeCloud(twoScales(reads));
+    await new RenphoClient('a', 'b', fetchFn).getScaleMeasurements();
+    expect(reads).toEqual(['measurements_info_1', 'measurements_info_2']);
+  });
+
+  it('explains an unmatched selection with the available tables', async () => {
+    const { fetchFn } = fakeCloud(twoScales([]));
+    await expect(new RenphoClient('a', 'b', fetchFn).getScaleMeasurements(50, ['nope'])).rejects.toThrow(
+      /measurements_info_1, measurements_info_2/
+    );
+  });
+
+  it('lists the devices on the account', async () => {
+    const { fetchFn } = fakeCloud(twoScales([]));
+    const out = await new RenphoClient('a', 'b', fetchFn).listDevices();
+    expect(out.scales.map((s) => s.tableName)).toEqual(['measurements_info_1', 'measurements_info_2']);
+    expect(out.tapeRecords).toBe(2);
+  });
+});

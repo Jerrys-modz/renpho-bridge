@@ -36,7 +36,7 @@ export interface SessionStore {
   save(session: Session | null): Promise<void>;
 }
 
-interface DeviceScale {
+export interface DeviceScale {
   tableName?: string;
   count?: number;
   userIds?: (string | number)[];
@@ -256,13 +256,32 @@ export class RenphoClient {
    * Each table is read from the body-composition endpoint first, then the legacy one, because accounts
    * differ in which of the two holds the rows and the reported count is often 0 for impedance scales.
    */
-  async getScaleMeasurements(pageSize = 50): Promise<RenphoRecord[]> {
-    return this.withSession(() => this.readScale(pageSize));
+  async getScaleMeasurements(pageSize = 50, onlyTables?: string[]): Promise<RenphoRecord[]> {
+    return this.withSession(() => this.readScale(pageSize, onlyTables));
   }
 
-  private async readScale(pageSize: number): Promise<RenphoRecord[]> {
+  /** The scale tables on the account (what `SCALE_TABLES` selects from) plus the tape measure's record count. */
+  async listDevices(): Promise<{ scales: DeviceScale[]; tapeRecords: number }> {
+    let scales: DeviceScale[] = [];
+    await this.withSession(async () => {
+      scales = (await this.getDeviceInfo()).scale ?? [];
+      return [{}];
+    });
+    const tape = await this.getGirthMeasurements();
+    return { scales, tapeRecords: tape.length };
+  }
+
+  private async readScale(pageSize: number, onlyTables?: string[]): Promise<RenphoRecord[]> {
     const info = await this.getDeviceInfo();
-    const scales = info.scale ?? [];
+    let scales = info.scale ?? [];
+    if (onlyTables && onlyTables.length > 0) {
+      const wanted = new Set(onlyTables);
+      scales = scales.filter((sc) => sc.tableName && wanted.has(sc.tableName));
+      if (scales.length === 0) {
+        const available = (info.scale ?? []).map((sc) => sc.tableName).filter(Boolean).join(', ') || 'none';
+        throw new Error(`SCALE_TABLES matched no scale on this account (available: ${available}). Run with --list-devices.`);
+      }
+    }
     this.debug(
       `device info: ${scales.length} scale table(s) ${JSON.stringify(
         scales.map((sc) => ({ table: sc.tableName, count: sc.count, users: sc.userIds?.length ?? 0 }))

@@ -6,6 +6,8 @@ import type { SparkyClient } from './sparkyClient.js';
 export interface SyncOptions {
   includeScale: boolean;
   includeTape: boolean;
+  /** Restrict the scale sync to these scale table names (see `--list-devices`); empty or unset means all. */
+  scaleTables?: string[];
   statePath: string;
   dryRun: boolean;
   /** Days of recent data re-sent on every run after the initial full sync (default 3). */
@@ -84,7 +86,7 @@ export async function runSync(
   };
 
   if (opts.includeTape) collect('tape', await renpho.getGirthMeasurements(), (r) => mapGirthRecord(r, opts.lengthUnit));
-  if (opts.includeScale) collect('scale', await renpho.getScaleMeasurements(), mapScaleRecord);
+  if (opts.includeScale) collect('scale', await renpho.getScaleMeasurements(undefined, opts.scaleTables), mapScaleRecord);
 
   const base = { mode: full ? ('full' as const) : ('window' as const), cutoff, fetched, skipped, entries: entries.length };
   if (opts.dryRun) return { ...base, sent: 0, errors: [], pending: entries };

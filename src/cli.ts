@@ -32,9 +32,49 @@ const renpho = new RenphoClient(
 console.log(
   `renpho-bridge build ${(process.env.GIT_SHA ?? 'dev').slice(0, 7)} | test mode: ${dryRun ? 'on' : 'off'} | debug: ${debugOn ? 'on' : 'off'}`
 );
-const sparky = dryRun
+const sparky = dryRun || args.has('--list-devices')
   ? new SparkyClient('', '')
   : new SparkyClient(required('SPARKY_URL'), required('SPARKY_API_KEY'));
+
+// Which devices to sync: SYNC_DEVICES=scale,tape (default both). --tape-only / --scale-only still work.
+const devices = new Set(
+  (process.env.SYNC_DEVICES ?? 'scale,tape')
+    .toLowerCase()
+    .split(',')
+    .map((d) => d.trim())
+    .filter(Boolean)
+);
+for (const d of devices) {
+  if (d !== 'scale' && d !== 'tape') {
+    console.error(`SYNC_DEVICES has unknown device "${d}" (use scale, tape or scale,tape).`);
+    process.exit(2);
+  }
+}
+if (args.has('--tape-only')) {
+  devices.clear();
+  devices.add('tape');
+}
+if (args.has('--scale-only')) {
+  devices.clear();
+  devices.add('scale');
+}
+if (devices.size === 0) {
+  console.error('SYNC_DEVICES selects nothing; use scale, tape or scale,tape.');
+  process.exit(2);
+}
+const scaleTables = (process.env.SCALE_TABLES ?? '')
+  .split(',')
+  .map((t) => t.trim())
+  .filter(Boolean);
+
+if (args.has('--list-devices')) {
+  const { scales, tapeRecords } = await renpho.listDevices();
+  console.log('Scales on this RENPHO account (use the table name in SCALE_TABLES to pick one):');
+  if (scales.length === 0) console.log('  none');
+  for (const sc of scales) console.log(`  ${sc.tableName ?? '(unnamed)'}  ${sc.count ?? 0} record(s) reported`);
+  console.log(`Tape measure: ${tapeRecords} record(s). Choose devices with SYNC_DEVICES=scale,tape.`);
+  process.exit(0);
+}
 
 const syncDays = Number(process.env.SYNC_DAYS ?? 3);
 if (!Number.isInteger(syncDays) || syncDays < 1) {
@@ -52,8 +92,9 @@ const lengthUnit: LengthUnit = rawUnit;
 
 async function once(): Promise<boolean> {
   const result = await runSync(renpho, sparky, {
-    includeTape: !args.has('--scale-only'),
-    includeScale: !args.has('--tape-only'),
+    includeTape: devices.has('tape'),
+    includeScale: devices.has('scale'),
+    scaleTables,
     dryRun,
     statePath: process.env.STATE_PATH ?? 'state.json',
     since: sinceArg ?? process.env.SINCE_DATE,

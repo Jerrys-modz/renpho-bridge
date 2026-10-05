@@ -73,3 +73,18 @@ describe('runSync', () => {
     expect(r.mode).toBe('window');
   });
 });
+
+describe('runSync device selection', () => {
+  it('passes the scale table filter through and skips unselected devices', async () => {
+    const statePath = await tmpState();
+    const getScaleMeasurements = vi.fn(async () => []);
+    const getGirthMeasurements = vi.fn(async () => records);
+    await runSync(
+      { getScaleMeasurements, getGirthMeasurements },
+      { send: mkSend() },
+      { ...base, statePath, dryRun: true, includeTape: false, scaleTables: ['measurements_info_8'] }
+    );
+    expect(getGirthMeasurements).not.toHaveBeenCalled();
+    expect(getScaleMeasurements).toHaveBeenCalledWith(undefined, ['measurements_info_8']);
+  });
+});

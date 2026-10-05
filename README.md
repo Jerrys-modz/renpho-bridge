@@ -22,6 +22,8 @@ It is a standalone tool and needs no changes to SparkyFitness.
    | `SPARKY_API_KEY` | The API key from step 1 |
    | `STATE_PATH` | Optional, default `state.json`: remembers that the initial full sync finished |
    | `LENGTH_UNIT` | Optional, `cm` (default) or `in`: unit for the custom tape sites (chest, arms, ...). Set to `in` if your SparkyFitness measurement unit is inches |
+   | `SYNC_DEVICES` | Optional, default `scale,tape`: which devices to sync. `scale`, `tape` or both |
+   | `SCALE_TABLES` | Optional: only sync these scale tables (comma-separated, e.g. `measurements_info_8`). Empty means every scale on the account. Find names with `--list-devices` |
    | `SYNC_DAYS` | Optional, default `3`: after the first run, how many recent days are re-sent on every sync |
    | `FULL_SYNC` / `SINCE_DATE` | Optional: `FULL_SYNC=true` re-sends the whole history; `SINCE_DATE=YYYY-MM-DD` limits the full sync to that date onward |
    | `SYNC_INTERVAL_MINUTES` | Optional: if > 0 the process keeps running and syncs on this interval |
@@ -32,7 +34,9 @@ It is a standalone tool and needs no changes to SparkyFitness.
 
 **Debugging:** `--debug` or `DEBUG=true` also logs what RENPHO's account reports: scale table names and counts, and how many records each endpoint returned. It logs counts only, never your measurement values. With debug on it also calls RENPHO's `getTokenTime` endpoint once per run and logs the response (tokens masked), to help work out how long a session lasts.
 
-Flags: `--debug`, `--full`, `--dry-run`/`--test`, `--tape-only`, `--scale-only`, `--since=YYYY-MM-DD`.
+**Choosing devices:** `docker compose run --rm sparkyfitness-renpho --list-devices` (or `npm run sync -- --list-devices`) shows the scales and tape measure on your account without syncing anything (SparkyFitness settings aren't needed). Scales are identified by RENPHO's table name, not a friendly name.
+
+Flags: `--list-devices`, `--debug`, `--full`, `--dry-run`/`--test`, `--tape-only`, `--scale-only`, `--since=YYYY-MM-DD`.
 
 ## Docker
 
