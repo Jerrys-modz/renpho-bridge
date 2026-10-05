@@ -13,6 +13,9 @@ services:
       DEBUG: ${DEBUG:-false}
       SYNC_DEVICES: ${SYNC_DEVICES:-scale,tape}
       SCALE_TABLES: ${SCALE_TABLES:-}
+      SYNC_RETRIES: ${SYNC_RETRIES:-3}
+      HEALTHCHECK_URL: ${HEALTHCHECK_URL:-}
+      NOTIFY_URL: ${NOTIFY_URL:-}
       SYNC_DAYS: ${SYNC_DAYS:-3}
       FULL_SYNC: ${FULL_SYNC:-false}
       SINCE_DATE: ${SINCE_DATE:-}

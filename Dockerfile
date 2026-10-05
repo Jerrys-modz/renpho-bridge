@@ -18,4 +18,6 @@ COPY package.json ./
 RUN mkdir /data && chown node:node /data
 USER node
 VOLUME /data
+# Unhealthy when no sync has succeeded within two intervals (see src/monitor.ts).
+HEALTHCHECK --interval=5m --timeout=10s --start-period=5m --retries=1 CMD ["node", "dist/healthcheck.js"]
 ENTRYPOINT ["node", "dist/cli.js"]

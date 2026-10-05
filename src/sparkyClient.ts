@@ -1,3 +1,4 @@
+import { HttpError } from './errors.js';
 import type { HealthEntry } from './mapping.js';
 
 export interface IngestResult {
@@ -23,8 +24,9 @@ export class SparkyClient {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': this.apiKey },
         body: JSON.stringify(batch),
+        signal: AbortSignal.timeout(120_000),
       });
-      if (!res.ok) throw new Error(`SparkyFitness returned HTTP ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new HttpError('SparkyFitness', res.status, (await res.text()).slice(0, 300));
       const body = (await res.json()) as IngestResult;
       errors.push(...(body.errors ?? []));
       sent += batch.length - (body.errors?.length ?? 0);

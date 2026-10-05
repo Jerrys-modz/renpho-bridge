@@ -1,3 +1,4 @@
+import { HttpError, isRetryable } from './errors.js';
 import { aesEncrypt, decryptResponse, encryptRequest } from './crypto.js';
 
 const EMPTY_RECHECK_MS = 24 * 60 * 60 * 1000;
@@ -107,8 +108,9 @@ export class RenphoClient {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000),
     });
-    if (!res.ok) throw new Error(`RENPHO ${endpoint} returned HTTP ${res.status}`);
+    if (!res.ok) throw new HttpError(`RENPHO ${endpoint}`, res.status);
     return (await res.json()) as ApiResponse;
   }
 
@@ -171,6 +173,8 @@ export class RenphoClient {
       if (ageMs < EMPTY_RECHECK_MS) return records;
       this.debug('saved session is over a day old and returned nothing; logging in again to double-check');
     } catch (err) {
+      // A network blip or server error says nothing about the token; logging in again would only sign the app out.
+      if (isRetryable(err)) throw err;
       this.debug(`saved session failed (${err instanceof Error ? err.message : String(err)}); logging in again`);
     }
     this.token = null;

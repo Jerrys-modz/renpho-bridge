@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import type { LengthUnit } from './mapping.js';
 import { dirname, join } from 'node:path';
+import { createMonitor } from './monitor.js';
+import { withRetry } from './retry.js';
 import { fileSessionStore } from './sessionStore.js';
 import { RenphoClient } from './renphoClient.js';
 import { SparkyClient } from './sparkyClient.js';
@@ -90,6 +92,17 @@ if (rawUnit !== 'cm' && rawUnit !== 'in') {
 }
 const lengthUnit: LengthUnit = rawUnit;
 
+const retries = Number(process.env.SYNC_RETRIES ?? 3);
+if (!Number.isInteger(retries) || retries < 1) {
+  console.error('SYNC_RETRIES must be a whole number, 1 or more (total tries per sync).');
+  process.exit(2);
+}
+const monitor = createMonitor({
+  statusPath: process.env.STATUS_PATH ?? join(dirname(process.env.STATE_PATH ?? 'state.json'), 'status.json'),
+  healthcheckUrl: process.env.HEALTHCHECK_URL || undefined,
+  notifyUrl: process.env.NOTIFY_URL || undefined,
+});
+
 async function once(): Promise<boolean> {
   const result = await runSync(renpho, sparky, {
     includeTape: devices.has('tape'),
@@ -122,21 +135,36 @@ async function once(): Promise<boolean> {
   return true;
 }
 
-if (intervalMinutes > 0) {
-  // Long-running mode (Docker): a failed run is logged and retried on the next tick.
-  for (;;) {
-    try {
-      await once();
-    } catch (err) {
-      console.error(`${new Date().toISOString()} sync failed:`, err instanceof Error ? err.message : err);
+/** One sync with retries for transient failures; records the outcome for alerts and the Docker healthcheck. */
+async function runOnce(): Promise<boolean> {
+  try {
+    const ok = await withRetry(once, {
+      attempts: retries,
+      onRetry: (err, attempt, delayMs) =>
+        console.error(
+          `${new Date().toISOString()} attempt ${attempt}/${retries} failed (${err instanceof Error ? err.message : String(err)}); retrying in ${Math.round(delayMs / 1000)}s`
+        ),
+    });
+    if (ok) {
+      await monitor.success();
+      return true;
     }
+    await monitor.failure(new Error('SparkyFitness rejected some entries (see the log above)'));
+    return false;
+  } catch (err) {
+    console.error(`${new Date().toISOString()} sync failed:`, err instanceof Error ? err.message : err);
+    await monitor.failure(err);
+    return false;
+  }
+}
+
+await monitor.start();
+if (intervalMinutes > 0) {
+  // Long-running mode (Docker): a failed run is logged and tried again on the next tick.
+  for (;;) {
+    await runOnce();
     await new Promise((r) => setTimeout(r, intervalMinutes * 60_000));
   }
-} else {
-  try {
-    if (!(await once())) process.exit(1);
-  } catch (err) {
-    console.error('sync failed:', err instanceof Error ? err.message : err);
-    process.exit(1);
-  }
+} else if (!(await runOnce())) {
+  process.exit(1);
 }

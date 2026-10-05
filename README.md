@@ -1,5 +1,8 @@
 # sparkyfitness-renpho
 
+[![Docker](https://github.com/Jerrys-modz/renpho-bridge/actions/workflows/docker.yml/badge.svg)](https://github.com/Jerrys-modz/renpho-bridge/actions/workflows/docker.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Community tool that syncs **RENPHO smart tape measure** (and optionally smart scale) measurements into
 [SparkyFitness](https://github.com/CodeWithCJ/SparkyFitness) through its existing `POST /api/health-data` endpoint.
 It is a standalone tool and needs no changes to SparkyFitness.
@@ -24,6 +27,9 @@ It is a standalone tool and needs no changes to SparkyFitness.
    | `LENGTH_UNIT` | Optional, `cm` (default) or `in`: unit for the custom tape sites (chest, arms, ...). Set to `in` if your SparkyFitness measurement unit is inches |
    | `SYNC_DEVICES` | Optional, default `scale,tape`: which devices to sync. `scale`, `tape` or both |
    | `SCALE_TABLES` | Optional: only sync these scale tables (comma-separated, e.g. `measurements_info_8`). Empty means every scale on the account. Find names with `--list-devices` |
+   | `SYNC_RETRIES` | Optional, default `3`: total tries per sync for temporary network or server errors (waits 30s, then 2 min) |
+   | `HEALTHCHECK_URL` | Optional: healthchecks.io-style URL, called after each successful sync and at `<url>/fail` after a failed one |
+   | `NOTIFY_URL` | Optional: ntfy-style URL, POSTed once when syncs start failing and once when they recover |
    | `SYNC_DAYS` | Optional, default `3`: after the first run, how many recent days are re-sent on every sync |
    | `FULL_SYNC` / `SINCE_DATE` | Optional: `FULL_SYNC=true` re-sends the whole history; `SINCE_DATE=YYYY-MM-DD` limits the full sync to that date onward |
    | `SYNC_INTERVAL_MINUTES` | Optional: if > 0 the process keeps running and syncs on this interval |
@@ -64,6 +70,18 @@ upserts these values by day, so edits and late-arriving records are picked up an
 next run retries the full sync. Use `--full` / `FULL_SYNC=true` to redo the full history. Test mode never
 saves state, so it keeps showing the full history until a real run completes.
 
+## Monitoring and retries
+
+- **Retries:** network errors, timeouts, and 5xx/408/429 responses are retried (`SYNC_RETRIES`). Wrong
+  credentials, a rejected API call or entries SparkyFitness refuses are not, since repeating a failed RENPHO
+  login can lock the account.
+- **Docker health:** the image has a `HEALTHCHECK` that turns unhealthy if no sync has succeeded within two
+  sync intervals plus 15 minutes (`docker ps` shows it; autoheal tools and Portainer can act on it).
+  `status.json` in the data volume holds the last success, last error and failure count.
+- **Alerts:** set `HEALTHCHECK_URL` for a dead-man's-switch service such as healthchecks.io, and/or
+  `NOTIFY_URL` (for example `https://ntfy.sh/your-topic`) for a push message when syncs start failing and when
+  they recover. You get one alert per outage, not one per attempt. Alert calls never affect the sync itself.
+
 ## Getting logged out of the RENPHO app
 
 Every RENPHO login creates a new session, which can sign the phone app out. To avoid doing that on every
@@ -93,8 +111,7 @@ cm first. neck/waist/hips are always sent in cm, because SparkyFitness stores th
 user's chosen unit. The custom sites are stored with the unit they are sent in, so set `LENGTH_UNIT=in` if you
 use inches (changing it later creates a separate category, since the category is keyed on name and unit). Days use the timezone stored on each RENPHO record. 
 
-Scale support is untested against real hardware (the author of the original proposal owns only the tape
-measure); testers with a RENPHO scale are welcome.
+Both the tape measure and the scale have been checked against real RENPHO accounts (including a 222-record scale history). RENPHO's API is unofficial, so field names can differ between scale models; if a value is missing or looks wrong, open an issue with the `--debug` output.
 
 ## Development
 

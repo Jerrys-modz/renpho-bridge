@@ -2,3 +2,5 @@ node_modules
 dist
 .env
 state.json
+status.json
+session.json
