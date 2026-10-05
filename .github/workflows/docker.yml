@@ -3,8 +3,10 @@ name: Docker
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['v*', '[0-9]*.[0-9]*.[0-9]*']
   pull_request:
+  # Lets a build be started by hand on an existing tag (Actions tab, choose the tag as the ref).
+  workflow_dispatch:
 
 permissions:
   contents: read
