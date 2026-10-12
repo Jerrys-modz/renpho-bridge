@@ -2,7 +2,8 @@ import { HttpError, isRetryable } from './errors.js';
 import { aesEncrypt, decryptResponse, encryptRequest } from './crypto.js';
 
 const EMPTY_RECHECK_MS = 24 * 60 * 60 * 1000;
-const API_BASE_URL = 'https://cloud.renpho.com';
+/** Renpho Health cloud. renpho.com and renpho.eu are storefronts, not this API. */
+export const DEFAULT_API_BASE_URL = 'https://cloud.renpho.com';
 const APP_VERSION = '6.6.0';
 const PLATFORM = 'android';
 const SUCCESS_CODES = new Set(['0', '101', '200', '20000']);
@@ -21,6 +22,38 @@ const ENDPOINTS = {
   scale: 'RenphoHealth/scale/queryAllMeasureDataList',
 } as const;
 
+
+export interface RenphoClientOptions {
+  /** Two-letter account area sent at login. The app stores this on the account; US is the default. */
+  areaCode?: string;
+  /** Renpho Health API origin. Defaults to https://cloud.renpho.com. */
+  baseUrl?: string;
+}
+
+/** Uppercase two-letter area code, or throw. */
+export function normalizeAreaCode(value: string | undefined): string {
+  const code = (value ?? 'US').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) {
+    throw new Error(`RENPHO area code must be two letters (for example DE, GB, or US), got ${JSON.stringify(value ?? '')}`);
+  }
+  return code;
+}
+
+/** https origin with no path, query, or credentials. */
+export function normalizeApiBaseUrl(value: string | undefined): string {
+  const raw = (value ?? DEFAULT_API_BASE_URL).trim();
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`RENPHO API URL is not a valid URL: ${raw}`);
+  }
+  const hasPath = url.pathname !== '/' && url.pathname !== '';
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || hasPath) {
+    throw new Error('RENPHO API URL must be an https origin with no path, for example https://cloud.renpho.com');
+  }
+  return url.origin;
+}
 
 export type RenphoRecord = Record<string, unknown>;
 
@@ -88,13 +121,20 @@ export class RenphoClient {
   private usingSaved = false;
   private probed = false;
 
+  private readonly areaCode: string;
+  private readonly baseUrl: string;
+
   constructor(
     private readonly email: string,
     private readonly password: string,
     private readonly fetchFn: typeof fetch = fetch,
     private readonly verbose = false,
-    private readonly store?: SessionStore
-  ) {}
+    private readonly store?: SessionStore,
+    options: RenphoClientOptions = {}
+  ) {
+    this.areaCode = normalizeAreaCode(options.areaCode);
+    this.baseUrl = normalizeApiBaseUrl(options.baseUrl);
+  }
 
   private async post(endpoint: string, body: unknown, auth = true): Promise<ApiResponse> {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
@@ -104,7 +144,7 @@ export class RenphoClient {
       headers.appVersion = APP_VERSION;
       headers.platform = PLATFORM;
     }
-    const res = await this.fetchFn(`${API_BASE_URL}/${endpoint}`, {
+    const res = await this.fetchFn(`${this.baseUrl}/${endpoint}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -119,7 +159,7 @@ export class RenphoClient {
       questionnaire: {},
       login: {
         password: this.password,
-        areaCode: 'US',
+        areaCode: this.areaCode,
         appRevision: APP_VERSION,
         cellphoneType: 'NodeScript',
         systemType: '11',
@@ -138,7 +178,7 @@ export class RenphoClient {
     this.loginAt = new Date().toISOString();
     this.usingSaved = false;
     await this.store?.save({ token, userId: this.userId, loginAt: this.loginAt });
-    this.debug('logged in (new RENPHO session)');
+    this.debug(`logged in (new RENPHO session, ${this.baseUrl}, area ${this.areaCode})`);
   }
 
   /**

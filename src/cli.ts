@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { createMonitor } from './monitor.js';
 import { withRetry } from './retry.js';
 import { fileSessionStore } from './sessionStore.js';
-import { RenphoClient } from './renphoClient.js';
+import { normalizeApiBaseUrl, normalizeAreaCode, RenphoClient } from './renphoClient.js';
 import { SparkyClient } from './sparkyClient.js';
 import { runSync } from './sync.js';
 
@@ -24,15 +24,25 @@ const sinceArg = process.argv.find((a) => a.startsWith('--since='))?.slice(8);
 const dryRun = args.has('--dry-run') || args.has('--test') || ['1', 'true', 'yes'].includes((process.env.TEST_MODE ?? '').toLowerCase());
 
 const debugOn = args.has('--debug') || ['1', 'true', 'yes'].includes((process.env.DEBUG ?? '').toLowerCase());
+let areaCode: string;
+let apiBaseUrl: string;
+try {
+  areaCode = normalizeAreaCode(process.env.RENPHO_AREA_CODE);
+  apiBaseUrl = normalizeApiBaseUrl(process.env.RENPHO_API_URL);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(2);
+}
 const renpho = new RenphoClient(
   required('RENPHO_EMAIL'),
   required('RENPHO_PASSWORD'),
   fetch,
   debugOn,
-  fileSessionStore(process.env.SESSION_PATH ?? join(dirname(process.env.STATE_PATH ?? 'state.json'), 'session.json'))
+  fileSessionStore(process.env.SESSION_PATH ?? join(dirname(process.env.STATE_PATH ?? 'state.json'), 'session.json')),
+  { areaCode, baseUrl: apiBaseUrl }
 );
 console.log(
-  `renpho-bridge build ${(process.env.GIT_SHA ?? 'dev').slice(0, 7)} | test mode: ${dryRun ? 'on' : 'off'} | debug: ${debugOn ? 'on' : 'off'}`
+  `renpho-bridge build ${(process.env.GIT_SHA ?? 'dev').slice(0, 7)} | test mode: ${dryRun ? 'on' : 'off'} | debug: ${debugOn ? 'on' : 'off'} | ${apiBaseUrl} area ${areaCode}`
 );
 const sparky = dryRun || args.has('--list-devices')
   ? new SparkyClient('', '')

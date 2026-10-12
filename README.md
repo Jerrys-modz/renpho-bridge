@@ -21,6 +21,8 @@ It is a standalone tool and needs no changes to SparkyFitness.
    | Variable | Meaning |
    | --- | --- |
    | `RENPHO_EMAIL` / `RENPHO_PASSWORD` | RENPHO account (an email/password login; SSO-only accounts need a password set) |
+   | `RENPHO_AREA_CODE` | Optional, default `US`. Two-letter area stored on the Renpho Health account. `renpho.com` and `renpho.eu` are shop sites; both regions' Health accounts use `https://cloud.renpho.com`. Set the country code chosen in the app, for example `DE`, `GB`, `FR`, or `NL` |
+   | `RENPHO_API_URL` | Optional, default `https://cloud.renpho.com`. https origin only. Set this only if your account is on a different Renpho Health cloud |
    | `SPARKY_URL` | Base URL of your SparkyFitness server, e.g. `https://fit.example.com` |
    | `SPARKY_API_KEY` | The API key from step 1 |
    | `STATE_PATH` | Optional, default `state.json`: remembers that the initial full sync finished |
@@ -52,9 +54,7 @@ docker compose up -d
 docker compose logs -f
 ```
 
-`docker-compose.yml` pulls the prebuilt multi-arch image (amd64/arm64) from
-`ghcr.io/jerrys-modz/renpho-bridge:latest`, published by the `Docker` workflow on every push to `main` and on
-`v*` tags. To build from source instead, replace the `image:` line with `build: .` and use `up -d --build`.
+`docker-compose.yml` pulls `ghcr.io/p1ranha/renpho-bridge:latest`, published by the `Docker` workflow on every push to `main`. The upstream `ghcr.io/jerrys-modz/renpho-bridge` image ignores `RENPHO_AREA_CODE` and `RENPHO_API_URL`.
 
 The container syncs every `SYNC_INTERVAL_MINUTES` (default 60) and keeps its state in the `renpho-state`
 volume. Set `SYNC_INTERVAL_MINUTES=0` to sync once and exit (for an external scheduler), e.g.

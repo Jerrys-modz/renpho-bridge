@@ -22,6 +22,29 @@ function fakeCloud(routes: Record<string, (body: Record<string, unknown>) => unk
 
 const login = () => ok({ login: { token: 'tok', id: 1234567 } });
 
+describe('RenphoClient login region', () => {
+  it('sends the account area code to the configured Renpho cloud', async () => {
+    const urls: string[] = [];
+    const { fetchFn: inner, calls } = fakeCloud({
+      'renpho-aggregation/user/login': login,
+    });
+    const fetchFn = (async (url: string, init: { body: string }) => {
+      urls.push(url);
+      return inner(url, init);
+    }) as unknown as typeof fetch;
+    await new RenphoClient('user@example.com', 'secret', fetchFn, false, undefined, {
+      areaCode: 'de',
+      baseUrl: 'https://cloud.renpho.com/',
+    }).login();
+    expect(urls[0]).toBe('https://cloud.renpho.com/renpho-aggregation/user/login');
+    expect(calls[0]?.body).toMatchObject({ login: { areaCode: 'DE', email: 'user@example.com' } });
+  });
+
+  it('rejects an area code that is not two letters', () => {
+    expect(() => new RenphoClient('a', 'b', fetch, false, undefined, { areaCode: 'EUU' })).toThrow(/two letters/);
+  });
+});
+
 describe('RenphoClient.getScaleMeasurements', () => {
   it('uses the table and user id from device info, not a guessed shard', async () => {
     const { fetchFn, calls } = fakeCloud({
