@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-import { setDefaultResultOrder } from 'node:dns';
 import type { LengthUnit } from './mapping.js';
-// Docker often has a broken IPv6 route; Node would try that first and report only "fetch failed".
-setDefaultResultOrder('ipv4first');
 import { dirname, join } from 'node:path';
 import { createMonitor } from './monitor.js';
 import { describeError } from './errors.js';
