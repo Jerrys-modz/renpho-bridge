@@ -1,7 +1,11 @@
 #!/usr/bin/env node
+import { setDefaultResultOrder } from 'node:dns';
 import type { LengthUnit } from './mapping.js';
+// Docker often has a broken IPv6 route; Node would try that first and report only "fetch failed".
+setDefaultResultOrder('ipv4first');
 import { dirname, join } from 'node:path';
 import { createMonitor } from './monitor.js';
+import { describeError } from './errors.js';
 import { withRetry } from './retry.js';
 import { fileSessionStore } from './sessionStore.js';
 import { normalizeApiBaseUrl, normalizeAreaCode, RenphoClient } from './renphoClient.js';
@@ -152,7 +156,7 @@ async function runOnce(): Promise<boolean> {
       attempts: retries,
       onRetry: (err, attempt, delayMs) =>
         console.error(
-          `${new Date().toISOString()} attempt ${attempt}/${retries} failed (${err instanceof Error ? err.message : String(err)}); retrying in ${Math.round(delayMs / 1000)}s`
+          `${new Date().toISOString()} attempt ${attempt}/${retries} failed (${describeError(err)}); retrying in ${Math.round(delayMs / 1000)}s`
         ),
     });
     if (ok) {
@@ -162,7 +166,7 @@ async function runOnce(): Promise<boolean> {
     await monitor.failure(new Error('SparkyFitness rejected some entries (see the log above)'));
     return false;
   } catch (err) {
-    console.error(`${new Date().toISOString()} sync failed:`, err instanceof Error ? err.message : err);
+    console.error(`${new Date().toISOString()} sync failed:`, describeError(err));
     await monitor.failure(err);
     return false;
   }

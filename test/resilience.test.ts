@@ -2,10 +2,23 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { HttpError, isRetryable } from '../src/errors.js';
+import { describeError, HttpError, isRetryable } from '../src/errors.js';
 import { createMonitor, isHealthy, readStatus } from '../src/monitor.js';
 import { RenphoApiError } from '../src/renphoClient.js';
 import { withRetry } from '../src/retry.js';
+
+describe('describeError', () => {
+  it('includes the network cause hidden behind fetch failed', () => {
+    const cause = Object.assign(new Error('getaddrinfo ENOTFOUND cloud.renpho.com'), {
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'cloud.renpho.com',
+    });
+    expect(describeError(new TypeError('fetch failed', { cause }))).toBe(
+      'fetch failed -> getaddrinfo ENOTFOUND cloud.renpho.com (ENOTFOUND getaddrinfo cloud.renpho.com)'
+    );
+  });
+});
 
 describe('isRetryable', () => {
   it('retries network errors, timeouts, 5xx, 408 and 429', () => {
