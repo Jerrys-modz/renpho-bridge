@@ -54,7 +54,9 @@ docker compose up -d
 docker compose logs -f
 ```
 
-`docker-compose.yml` pulls `ghcr.io/p1ranha/renpho-bridge:latest`, published by the `Docker` workflow on every push to `main`. The upstream `ghcr.io/jerrys-modz/renpho-bridge` image ignores `RENPHO_AREA_CODE` and `RENPHO_API_URL`.
+`docker-compose.yml` pulls the prebuilt multi-arch image (amd64/arm64) from
+`ghcr.io/jerrys-modz/renpho-bridge:latest`, published by the `Docker` workflow on every push to `main` and on
+`v*` tags. To build from source instead, replace the `image:` line with `build: .` and use `up -d --build`.
 
 The container syncs every `SYNC_INTERVAL_MINUTES` (default 60) and keeps its state in the `renpho-state`
 volume. Set `SYNC_INTERVAL_MINUTES=0` to sync once and exit (for an external scheduler), e.g.
