@@ -4,15 +4,15 @@ import { extractRecords, RenphoClient } from '../src/renphoClient.js';
 
 const ok = (data: unknown) => ({ code: 101, msg: 'success', data: aesEncrypt(JSON.stringify(data)) });
 
-/** Fake RENPHO cloud keyed by endpoint path; records the decrypted request bodies. */
+/** Fake RENPHO cloud keyed by endpoint path; records the decrypted request bodies and headers. */
 function fakeCloud(routes: Record<string, (body: Record<string, unknown>) => unknown>) {
-  const calls: { path: string; body: Record<string, unknown> }[] = [];
-  const fetchFn = (async (url: string, init: { body: string }) => {
+  const calls: { path: string; body: Record<string, unknown>; headers: Record<string, string> }[] = [];
+  const fetchFn = (async (url: string, init: { body: string; headers?: Record<string, string> }) => {
     const path = new URL(url).pathname.slice(1);
     const enc = (JSON.parse(init.body) as { encryptData: string }).encryptData;
     const text = aesDecrypt(enc);
     const body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-    calls.push({ path, body });
+    calls.push({ path, body, headers: { ...(init.headers ?? {}) } });
     const handler = routes[path];
     const out = handler?.(body); // undefined means the server answered HTTP 400
     return { ok: out !== undefined, status: out !== undefined ? 200 : 400, json: async () => out };
@@ -21,6 +21,53 @@ function fakeCloud(routes: Record<string, (body: Record<string, unknown>) => unk
 }
 
 const login = () => ok({ login: { token: 'tok', id: 1234567 } });
+
+describe('RenphoClient login region', () => {
+  it('sends the account area code to the configured Renpho cloud', async () => {
+    const urls: string[] = [];
+    const { fetchFn: inner, calls } = fakeCloud({
+      'renpho-aggregation/user/login': login,
+    });
+    const fetchFn = (async (url: string, init: { body: string; headers?: Record<string, string> }) => {
+      urls.push(url);
+      return inner(url, init);
+    }) as unknown as typeof fetch;
+    await new RenphoClient('user@example.com', 'secret', fetchFn, false, undefined, {
+      areaCode: 'de',
+      baseUrl: 'https://cloud.renpho.com/',
+    }).login();
+    expect(urls[0]).toBe('https://cloud.renpho.com/renpho-aggregation/user/login');
+    expect(calls[0]?.body).toMatchObject({ login: { areaCode: 'DE', email: 'user@example.com' } });
+  });
+
+  it('sends appVersion and platform headers on unauthenticated login', async () => {
+    const { fetchFn, calls } = fakeCloud({
+      'renpho-aggregation/user/login': login,
+    });
+    await new RenphoClient('user@example.com', 'secret', fetchFn).login();
+    expect(calls[0]?.headers).toMatchObject({
+      appVersion: '6.6.0',
+      platform: 'android',
+    });
+    expect(calls[0]?.headers.token).toBeUndefined();
+  });
+
+  it('surfaces result.message when result.msg is absent', async () => {
+    const { fetchFn } = fakeCloud({
+      'renpho-aggregation/user/login': () => ({
+        code: -114,
+        message: 'Decryption failed, please check the parameters or key, or the data length is too long',
+      }),
+    });
+    await expect(new RenphoClient('user@example.com', 'secret', fetchFn).login()).rejects.toThrow(
+      /Login failed: code=-114, msg=Decryption failed/
+    );
+  });
+
+  it('rejects an area code that is not two letters', () => {
+    expect(() => new RenphoClient('a', 'b', fetch, false, undefined, { areaCode: 'EUU' })).toThrow(/two letters/);
+  });
+});
 
 describe('RenphoClient.getScaleMeasurements', () => {
   it('uses the table and user id from device info, not a guessed shard', async () => {

@@ -21,6 +21,8 @@ It is a standalone tool and needs no changes to SparkyFitness.
    | Variable | Meaning |
    | --- | --- |
    | `RENPHO_EMAIL` / `RENPHO_PASSWORD` | RENPHO account (an email/password login; SSO-only accounts need a password set) |
+   | `RENPHO_AREA_CODE` | Optional, default `US`. Two-letter area stored on the Renpho Health account. `renpho.com` and `renpho.eu` are shop sites; both regions' Health accounts use `https://cloud.renpho.com`. Set the country code chosen in the app, for example `DE`, `GB`, `FR`, or `NL` |
+   | `RENPHO_API_URL` | Optional, default `https://cloud.renpho.com`. https origin only. Set this only if your account is on a different Renpho Health cloud |
    | `SPARKY_URL` | Base URL of your SparkyFitness server, e.g. `https://fit.example.com` |
    | `SPARKY_API_KEY` | The API key from step 1 |
    | `STATE_PATH` | Optional, default `state.json`: remembers that the initial full sync finished |
