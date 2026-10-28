@@ -79,6 +79,7 @@ export interface DeviceScale {
 interface ApiResponse {
   code?: string | number;
   msg?: string;
+  message?: string;
   data?: string;
 }
 
@@ -94,9 +95,10 @@ export class RenphoApiError extends Error {
 }
 
 function checkResponse(result: ApiResponse, context: string): void {
-  if (String(result.msg ?? '').toLowerCase() === 'success') return;
+  const text = result.msg ?? result.message ?? '';
+  if (String(text).toLowerCase() === 'success') return;
   if (result.code !== undefined && SUCCESS_CODES.has(String(result.code))) return;
-  throw new RenphoApiError(context, result.code, result.msg ?? '');
+  throw new RenphoApiError(context, result.code, text);
 }
 
 /** The API wraps lists in a few different shapes; normalise to an array. */
@@ -137,12 +139,14 @@ export class RenphoClient {
   }
 
   private async post(endpoint: string, body: unknown, auth = true): Promise<ApiResponse> {
-    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      appVersion: APP_VERSION,
+      platform: PLATFORM,
+    };
     if (auth && this.token) {
       headers.token = this.token;
       headers.userId = String(this.userId);
-      headers.appVersion = APP_VERSION;
-      headers.platform = PLATFORM;
     }
     const res = await this.fetchFn(`${this.baseUrl}/${endpoint}`, {
       method: 'POST',
